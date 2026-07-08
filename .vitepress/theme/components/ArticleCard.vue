@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { withBase } from 'vitepress'
 import { getAllProgress } from '../composables/useReadProgress'
 
 const props = defineProps({
@@ -43,7 +44,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <a :href="link" class="article-card">
+  <a :href="withBase(link)" class="article-card">
     <!-- 右上角浏览进度 -->
     <span v-if="progressLabel" class="card-progress" :class="progressClass">
       {{ progressLabel }}

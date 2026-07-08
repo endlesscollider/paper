@@ -44,6 +44,7 @@ features:
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { withBase } from 'vitepress'
 import { data as articles } from './.vitepress/theme/articles.data.mts'
 import ArticleCard from './.vitepress/theme/components/ArticleCard.vue'
 
@@ -175,14 +176,14 @@ const tagStats = computed(() => {
     <h2>🏷️ 热门标签</h2>
   </div>
   <div class="tag-cloud-home">
-    <a v-for="[tag, count] in tagStats" :key="tag" :href="'/tags?tag=' + encodeURIComponent(tag)" class="tag-btn-home">
+    <a v-for="[tag, count] in tagStats" :key="tag" :href="withBase('/tags?tag=' + encodeURIComponent(tag))" class="tag-btn-home">
       # {{ tag }} <span class="tag-count-home">{{ count }}</span>
     </a>
   </div>
 </div>
 
 <div class="view-all-section">
-  <a href="/tags" class="view-all-link">查看全部文章 →</a>
+  <a :href="withBase('/tags')" class="view-all-link">查看全部文章 →</a>
 </div>
 
 </div>
