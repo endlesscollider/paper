@@ -1,0 +1,254 @@
+/* 全局页面内容区页边距 */
+.vp-doc {
+  padding: 0 32px;
+}
+
+@media (min-width: 960px) {
+  .vp-doc {
+    padding: 0 48px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .vp-doc {
+    padding: 0 64px;
+  }
+}
+
+/* ===== TagCloud 组件样式 ===== */
+
+.tag-cloud-wrapper {
+  position: relative;
+}
+
+/* 分类 Tab 栏 */
+.category-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 6px;
+  background: var(--vp-c-bg-soft);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.category-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--vp-c-text-2);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.category-tab:hover {
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg);
+}
+
+.category-tab.active {
+  background: var(--vp-c-bg);
+  color: var(--vp-c-brand-1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.category-icon {
+  font-size: 16px;
+}
+
+.category-label {
+  font-size: 14px;
+}
+
+/* 标签云区域 */
+.tag-cloud-section {
+  padding: 20px 0;
+}
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* 低频标签折叠区 */
+.rare-tags-section {
+  margin-top: 12px;
+}
+
+.rare-tags-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--vp-c-text-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.rare-tags-toggle:hover {
+  color: var(--vp-c-brand-1);
+}
+
+.toggle-arrow {
+  display: inline-block;
+  transition: transform 0.25s ease;
+  font-size: 16px;
+}
+
+.toggle-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+.rare-tags {
+  margin-top: 10px;
+}
+
+.tag-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-2);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tag-btn:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+  transform: translateY(-1px);
+}
+
+.tag-btn.active {
+  background: var(--vp-c-brand-1);
+  color: white;
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 2px 8px rgba(var(--vp-c-brand-1-rgb, 100, 108, 255), 0.3);
+}
+
+.tag-name {
+  font-weight: 500;
+}
+
+.tag-count {
+  font-size: 11px;
+  opacity: 0.7;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.tag-btn.active .tag-count {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 结果统计栏 */
+.result-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-top: 1px solid var(--vp-c-border);
+  margin-top: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.result-hint {
+  font-size: 13px;
+  color: var(--vp-c-text-3);
+}
+
+.result-hint strong {
+  color: var(--vp-c-brand-1);
+  font-weight: 600;
+}
+
+/* 排序控件 */
+.sort-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.sort-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-3);
+  transition: all 0.2s;
+}
+
+.sort-btn:hover {
+  color: var(--vp-c-text-1);
+  border-color: var(--vp-c-brand-1);
+}
+
+.sort-btn.active {
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+  border-color: var(--vp-c-brand-1);
+}
+
+.active-filter {
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.active-filter:hover {
+  color: var(--vp-c-danger-1, #e53e3e);
+  background: rgba(229, 62, 62, 0.08);
+}
+
+/* 文章卡片网格布局 (全局) */
+.article-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+@media (min-width: 640px) {
+  .article-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--vp-c-text-3);
+  font-size: 15px;
+}
+
+/* ===== 暗色模式微调 ===== */
+.dark .category-tab.active {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dark .tag-count {
+  background: rgba(255, 255, 255, 0.08);
+}

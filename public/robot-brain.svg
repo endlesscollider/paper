@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Brain/Robot icon -->
+  <circle cx="100" cy="100" r="80" stroke="#646cff" stroke-width="3" fill="none" opacity="0.2"/>
+  <circle cx="100" cy="100" r="60" stroke="#646cff" stroke-width="2" fill="none" opacity="0.3"/>
+  
+  <!-- Neural network nodes -->
+  <circle cx="70" cy="70" r="8" fill="#646cff" opacity="0.8"/>
+  <circle cx="130" cy="70" r="8" fill="#646cff" opacity="0.8"/>
+  <circle cx="60" cy="110" r="8" fill="#646cff" opacity="0.6"/>
+  <circle cx="100" cy="90" r="10" fill="#646cff" opacity="0.9"/>
+  <circle cx="140" cy="110" r="8" fill="#646cff" opacity="0.6"/>
+  <circle cx="80" cy="140" r="8" fill="#646cff" opacity="0.7"/>
+  <circle cx="120" cy="140" r="8" fill="#646cff" opacity="0.7"/>
+  
+  <!-- Connections -->
+  <line x1="70" y1="70" x2="100" y2="90" stroke="#646cff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="130" y1="70" x2="100" y2="90" stroke="#646cff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="60" y1="110" x2="100" y2="90" stroke="#646cff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="140" y1="110" x2="100" y2="90" stroke="#646cff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="80" y1="140" x2="60" y2="110" stroke="#646cff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="80" y1="140" x2="100" y2="90" stroke="#646cff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="120" y1="140" x2="140" y2="110" stroke="#646cff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="120" y1="140" x2="100" y2="90" stroke="#646cff" stroke-width="1.5" opacity="0.4"/>
+  <line x1="70" y1="70" x2="60" y2="110" stroke="#646cff" stroke-width="1.5" opacity="0.3"/>
+  <line x1="130" y1="70" x2="140" y2="110" stroke="#646cff" stroke-width="1.5" opacity="0.3"/>
+  
+  <!-- Robot arm hint -->
+  <path d="M 100 150 L 100 170 L 85 185" stroke="#646cff" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+  <path d="M 100 170 L 115 185" stroke="#646cff" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+  <circle cx="85" cy="185" r="3" fill="#646cff" opacity="0.6"/>
+  <circle cx="115" cy="185" r="3" fill="#646cff" opacity="0.6"/>
+</svg>
