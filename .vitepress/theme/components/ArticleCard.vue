@@ -44,7 +44,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <a :href="withBase(link)" class="article-card">
+  <a :href="withBase(link + '.html')" class="article-card">
     <!-- 右上角浏览进度 -->
     <span v-if="progressLabel" class="card-progress" :class="progressClass">
       {{ progressLabel }}

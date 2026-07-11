@@ -15,6 +15,10 @@
 - [GR00T 与 π 系列对比 ACT](./GR00T与π系列对比ACT) — VLA 基础模型 vs 专用模仿学习策略
 - [从 ACT 到 PerAct2：双臂协调教程](./从ACT到PerAct2_双臂协调教程) — 为什么双臂需要显式 Coordination
 
+### RL 后训练
+
+- [RLinf BC 到 RL 的 ACT 后训练架构](./RLinf_BC到RL的ACT后训练架构) — 从 BC 预训练到 PPO 微调的完整架构、Loss 设计与工程实践
+
 ### 双臂操作
 
 - [双臂任务训练方法研究](./双臂任务训练方法研究) — 双臂协作模型训练的方法论
