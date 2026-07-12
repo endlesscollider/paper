@@ -65,47 +65,97 @@ category: 精读
 
 ---
 
-## 二、方法概述
+## 二、核心思路：在 VLA 系统中的位置与作用
 
-TOPIC 由三个组件构成：
+### 2.1 TOPIC 和 VLA 模型的关系——先讲清楚整体图景
+
+在深入组件之前，先弄清楚 TOPIC 的三个组件**在 VLA 系统中扮演什么角色、在哪个位置、什么时候用**：
+
+```mermaid
+flowchart LR
+    subgraph VLA模型["VLA 模型（7B，完全冻结）"]
+        direction TB
+        V1["视觉编码器"]
+        V2["语言编码器"]
+        V3["Transformer Backbone"]
+        V4["Action Head"]
+        V1 --> V3
+        V2 --> V3
+        V3 --> V4
+    end
+    
+    subgraph TOPIC["TOPIC 的三个组件"]
+        direction TB
+        P["① Prompt Pool\n（插在 backbone 输入端）\n每任务一组可训练向量"]
+        G["② Task Relation Graph\n（离线维护的数据结构）\n记录任务间相似度"]
+        I["③ Graph-guided Init\n（新任务训练开始前）\n用相似旧任务初始化新 prompt"]
+    end
+    
+    P -->|"拼接在输入序列前面"| V3
+    G -->|"决定从哪个旧 prompt 初始化"| I
+    I -->|"给出新 prompt 的初始值"| P
+```
+
+**关系说清楚**：
+
+| 组件 | 和 VLA 的关系 | 在哪个阶段使用 | 为什么需要它 |
+|------|-------------|-------------|------------|
+| Prompt Pool | 插在 VLA backbone 输入端——唯一可训练的部分，backbone 完全冻结 | 训练时学习新 prompt，推理时选择对应 prompt | 冻结 backbone 防遗忘，prompt 承担适应新任务的职责 |
+| Task Relation Graph | 独立于 VLA 的辅助数据结构，不参与 forward/backward | 每个任务训练完后更新图；新任务到来时查图 | 知道"哪些旧任务和新任务相似"，才能做有针对性的知识迁移 |
+| Graph-guided Init | 新任务训练**开始前**执行一次 | 仅在新任务启动训练那一刻 | 如果新 prompt 随机初始化，就浪费了旧任务已有的知识；从相似任务复制过来可以加速 3-7 倍 |
+
+**用大白话讲整个流程**：
+
+1. VLA 模型本身 7B 参数全部冻结——它是一个"固定的大脑"
+2. 每个任务有自己的"小纸条"（prompt，约 80K 参数），贴在大脑输入端
+3. 训练新任务时，只训练这张纸条，大脑不动 → 旧任务不受影响
+4. 关键创新：新任务的纸条不是空白的——TOPIC 查一张"任务关系图"，找到最相似的旧任务，把旧纸条抄过来当初始值
+5. 这样新任务从"已经会做类似事情"的状态开始学，而不是从零开始
+
+### 2.2 方法流程总览
 
 ```mermaid
 flowchart TB
-    subgraph TOPIC系统
-        A["Task-Specific Prompt Pool\n(每任务一个 prompt 向量)"]
-        B["Task Relation Graph\n(任务间相似性)"]
-        C["Graph-guided Initialization\n(新 prompt 从相似旧任务初始化)"]
-    end
-    D["新任务 T_k 到来"] --> B
-    B -->|"找最相似任务 T_j"| C
-    C -->|"prompt_k = prompt_j + Δ"| A
-    A --> E["冻结主干 + 只训练 prompt_k"]
-    E --> F["学完后更新关系图"]
-    F --> B
+    D["新任务 T_k 到来"] --> B["查 Task Relation Graph\n找最相似旧任务 T_j"]
+    B -->|"找到 T_j"| C["Graph-guided Init:\nprompt_k = prompt_j + 小噪声"]
+    C --> A["训练：冻结 VLA backbone\n只训练 prompt_k（80K参数）"]
+    A --> E["学完后：更新 Task Relation Graph\n加入 T_k 节点"]
+    E --> F["等待下一个新任务..."]
+    F --> D
 ```
 
 ---
 
-## 三、组件一：Task-Specific Prompt
+## 三、组件一：Task-Specific Prompt（和 VLA 的关系：插在输入端的可训练小模块）
 
-### 3.1 什么是 Prompt Tuning
+### 3.1 设计初衷：为什么要用 Prompt
+
+标准 VLA 学新任务的方式是微调参数（SFT / RL）。但微调会改变 backbone 参数 → 旧任务被覆盖 → 遗忘。
+
+**TOPIC 的解法**：**根本不动 backbone**——转而在输入端插入一小组可学习向量（prompt）。这些向量随着训练学会"引导"冻结的 backbone 完成特定任务。
+
+**类比**：大脑（backbone）不变，但每次做不同任务时戴上不同的"AR 眼镜"（prompt）——眼镜改变了大脑看到的信息，从而引导出不同行为。
+
+### 3.2 Prompt 在 VLA 前向传播中的位置
 
 在 Transformer 的输入序列前面插入 $L$ 个可学习的"虚拟 token"（prompt）：
 
 $$
-\text{输入} = [\underbrace{p_1, p_2, ..., p_L}_{\text{可学习 prompt}}, \underbrace{o_1, o_2, ..., o_N}_{\text{观测 token}}]
+\text{输入} = [\underbrace{p_1, p_2, ..., p_L}_{\text{可学习 prompt（只有这部分参与梯度更新）}}, \underbrace{o_1, o_2, ..., o_N}_{\text{观测 token（来自视觉+语言编码器）}}]
 $$
 
-每个 $p_i \in \mathbb{R}^d$ 是一个 $d$ 维向量（和 token embedding 同维度）。训练时只更新这 $L$ 个向量，主干网络完全冻结。
+每个 $p_i \in \mathbb{R}^d$ 是一个 $d$ 维向量（和 token embedding 同维度）。**训练时只更新这 $L$ 个向量，VLA 的所有其他参数完全冻结。**
+
+Transformer backbone 照常做 self-attention，但由于 prompt token 参与了 attention 计算，它们会影响所有后续 token 的表示——相当于一种"软性条件化"。
 
 **参数量对比**：
 - 全参数微调 7B 模型：7,000,000,000 参数
 - LoRA (rank=16)：≈ 10,000,000 参数
 - Prompt Tuning (L=20, d=4096)：$20 \times 4096 = 81,920$ 参数
 
-Prompt Tuning 的参数量是 LoRA 的 1/100、全参数的 1/85000。
+Prompt Tuning 的参数量是 LoRA 的 1/100、全参数的 1/85000。极其轻量。
 
-### 3.2 每任务独立 Prompt
+### 3.3 每任务独立 Prompt——为什么能防遗忘
 
 TOPIC 为每个任务分配独立的 prompt：
 
