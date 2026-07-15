@@ -78,13 +78,35 @@ $$
 
 **核心 loss**：
 
+**为什么需要这个 loss**：一致性约束说"同一轨迹上的任意两点都应映射到同一个终点"。但我们不能遍历轨迹上所有点对，所以退而求其次——只要求**相邻两点**的输出一致。如果每对相邻点输出都一样，传递性保证了整条轨迹的一致性。
+
 $$
 \mathcal{L}_{\text{CD}} = \mathbb{E}_{t,\,\mathbf{x}}\left\| f_\theta(\mathbf{x}_{t+\Delta t},\; t{+}\Delta t) - f_{\theta^-}(\hat{\mathbf{x}}_t,\; t) \right\|^2
 $$
 
-其中：
-- $\hat{\mathbf{x}}_t$ 是用 teacher 的 ODE 从 $\mathbf{x}_{t+\Delta t}$ 走一步到 $t$ 得到的
-- $\theta^-$ 是 $\theta$ 的 EMA（指数移动平均）副本
+> **一句话直觉**：在同一条轨迹上取两个相邻点，让它们的"跳到终点"的预测尽量一致。
+
+**逐项拆解**：
+
+| 符号 | 含义 | 直觉 |
+|------|------|------|
+| $\mathbf{x}_{t+\Delta t}$ | 轨迹上较早的点（噪声更多） | "路上的上一站" |
+| $\hat{\mathbf{x}}_t$ | 用 teacher ODE 从 $\mathbf{x}_{t+\Delta t}$ 走一步到 $t$ 得到的点 | "路上的下一站"（teacher 说的） |
+| $f_\theta(\mathbf{x}_{t+\Delta t}, t{+}\Delta t)$ | 学生网络对上一站的终点预测 | "从这里跳，你觉得终点在哪" |
+| $f_{\theta^-}(\hat{\mathbf{x}}_t, t)$ | EMA 网络对下一站的终点预测 | "从那里跳，EMA 觉得终点在哪" |
+| $\theta^-$ | $\theta$ 的 EMA（慢速更新副本） | 稳定训练目标（类似 DQN 的 target network） |
+| $\|\cdots\|^2$ | 两个预测的均方误差 | "两个终点预测一致吗" |
+| $\Delta t$ | 相邻点的时间间隔 | 越小越精确，但训练越慢 |
+
+**为什么用 EMA ($\theta^-$) 而不是 $\theta$**：如果两边都用 $\theta$，网络可以通过"两边一起输出常数"来作弊（loss=0 但没学到有用的东西）。用 EMA 作为 target 制造了不对称性——学生 $\theta$ 要去匹配一个"滞后版"的自己，迫使学到有意义的映射。
+
+**数值例子**：$d=2$，$t=0.3$，$\Delta t = 0.1$
+
+- $\mathbf{x}_{0.4}$ 是轨迹上 $t=0.4$ 的点 = $[1.2, -0.8]$
+- Teacher ODE 走一步得 $\hat{\mathbf{x}}_{0.3}$ = $[1.5, -0.5]$
+- 学生预测终点：$f_\theta([1.2, -0.8], 0.4) = [3.1, 2.0]$
+- EMA 预测终点：$f_{\theta^-}([1.5, -0.5], 0.3) = [3.0, 2.1]$
+- Loss = $(3.1-3.0)^2 + (2.0-2.1)^2 = 0.01 + 0.01 = 0.02$（很小 → 一致性好）
 
 **直觉**：相邻两点在同一条轨迹上 → 它们的 $f_\theta$ 输出应该一致。
 
@@ -122,21 +144,44 @@ $$
 
 ## 三、网络架构：满足边界条件
 
-一致性函数需要 $f_\theta(\mathbf{x}_1, 1) = \mathbf{x}_1$。通过 skip connection 参数化：
+一致性函数需要 $f_\theta(\mathbf{x}_1, 1) = \mathbf{x}_1$（在数据端是恒等映射）。如何让网络**硬性满足**这个约束？通过 skip connection 参数化：
 
 $$
 f_\theta(\mathbf{x}, t) = c_{\text{skip}}(t) \cdot \mathbf{x} + c_{\text{out}}(t) \cdot F_\theta(\mathbf{x}, t)
 $$
 
+> **一句话直觉**：输出 = 一部分直接抄输入（skip）+ 一部分由网络自由生成。通过让 skip 系数在 $t=1$ 时等于 1、网络系数等于 0，就硬性保证了边界条件。
+
+**逐项拆解**：
+
+| 符号 | 含义 | 直觉 |
+|------|------|------|
+| $c_{\text{skip}}(t)$ | 跳跃连接系数（从 0 到 1） | "直接抄输入的比例"——$t$ 接近 1 时几乎全抄 |
+| $c_{\text{out}}(t)$ | 网络输出系数（从 1 到 0） | "网络自由发挥的比例"——$t$ 接近 0 时全靠网络 |
+| $F_\theta(\mathbf{x}, t)$ | 自由网络（和 DDPM 架构相同） | "想怎么预测就怎么预测"的部分 |
+| $\mathbf{x}$ | 输入的带噪数据 | 在 $t=1$ 时就是干净数据 $\mathbf{x}_1$ |
+
 其中系数满足：
 
 $$
-c_{\text{skip}}(1) = 1,\; c_{\text{out}}(1) = 0 \quad \Rightarrow \quad f_\theta(\mathbf{x}_1, 1) = \mathbf{x}_1 \;\checkmark
+c_{\text{skip}}(1) = 1,\; c_{\text{out}}(1) = 0 \quad \Rightarrow \quad f_\theta(\mathbf{x}_1, 1) = 1 \cdot \mathbf{x}_1 + 0 \cdot F_\theta = \mathbf{x}_1 \;\checkmark
 $$
 
 $$
-c_{\text{skip}}(0) = 0,\; c_{\text{out}}(0) = 1 \quad \Rightarrow \quad f_\theta(\mathbf{x}_0, 0) = F_\theta(\mathbf{x}_0, 0) \;\text{（完全由网络决定）}
+c_{\text{skip}}(0) = 0,\; c_{\text{out}}(0) = 1 \quad \Rightarrow \quad f_\theta(\mathbf{x}_0, 0) = 0 + F_\theta(\mathbf{x}_0, 0) \;\text{（完全由网络决定）}
 $$
+
+**为什么不用 loss 来约束边界条件**：如果只在 loss 中加一个 $\|f_\theta(\mathbf{x}_1, 1) - \mathbf{x}_1\|^2$ 的惩罚项，网络可能在 $t=1$ 附近"近似"满足但不精确。参数化方式是**硬约束**——数学上保证精确满足，无论训练如何。
+
+**数值例子**：假设 $c_{\text{skip}}(t) = t$，$c_{\text{out}}(t) = 1-t$（最简单的线性版本）
+
+- 在 $t=0$（纯噪声输入 $\mathbf{x}_0 = [-1.2, 0.5]$）：
+  - $f_\theta = 0 \times [-1.2, 0.5] + 1 \times F_\theta([-1.2, 0.5], 0) = F_\theta(\cdots)$
+  - 网络完全自由决定输出（因为输入是纯噪声，没有有用信息可以"抄"）
+  
+- 在 $t=0.8$（接近数据的 $\mathbf{x}_{0.8} = [2.8, 4.1]$）：
+  - $f_\theta = 0.8 \times [2.8, 4.1] + 0.2 \times F_\theta([2.8, 4.1], 0.8)$
+  - 大部分来自直接抄输入（因为接近数据了，信号强）
 
 $F_\theta$ 的架构和 DDPM 的去噪网络**完全相同**（UNet / MLP / Transformer），只是外面多了一层 skip connection。
 
@@ -181,13 +226,37 @@ $$
 \mathbf{a} = f_\theta(\mathbf{x}_0,\; 0,\; \mathbf{s}), \quad \mathbf{x}_0 \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
 $$
 
+> **一句话直觉**：从正态噪声出发，一步映射到动作。等价于一个"输入是噪声、输出是动作"的确定性变换。
+
 这在形式上和**确定性策略 + 噪声输入**一样。$\log \pi(\mathbf{a}|\mathbf{s})$ 可以通过变量替换公式计算：
 
 $$
 \log \pi(\mathbf{a}|\mathbf{s}) = \log p(\mathbf{x}_0) - \log \left|\det\frac{\partial f_\theta}{\partial \mathbf{x}_0}\right|
 $$
 
-> Jacobian 行列式计算 $O(d^2)$，或用 Hutchinson estimator 近似到 $O(d)$。
+> **一句话直觉**：动作的概率 = 噪声起点的概率 / 变换对空间的拉伸程度。如果 $f_\theta$ 把噪声空间拉伸了（行列式大），那单个动作的概率就小了（概率质量被分散了）。
+
+**逐项拆解**：
+
+| 符号 | 含义 | 直觉 |
+|------|------|------|
+| $\log \pi(\mathbf{a}|\mathbf{s})$ | 在给定观测 $\mathbf{s}$ 下，生成动作 $\mathbf{a}$ 的对数概率 | "这个动作有多可能" |
+| $\log p(\mathbf{x}_0)$ | 噪声起点的对数概率 | 标准正态，直接算：$-\frac{d}{2}\log(2\pi) - \frac{1}{2}\|\mathbf{x}_0\|^2$ |
+| $\frac{\partial f_\theta}{\partial \mathbf{x}_0}$ | Jacobian 矩阵（$d \times d$） | 输出每个维度对输入每个维度的偏导数 |
+| $\det(\cdots)$ | Jacobian 行列式 | 衡量 $f_\theta$ 在 $\mathbf{x}_0$ 附近把空间放大了多少倍 |
+| $\log|\det(\cdots)|$ | 对数体积变化因子 | 减去它 = "补偿空间拉伸导致的密度稀释" |
+| 减号 | 拉伸越大密度越低 | 把一团面拉大 → 面变薄 → 每个位置的"面密度"降低 |
+
+**数值例子**：$d=2$，噪声 $\mathbf{x}_0 = [0.5, -0.3]$
+
+- $\log p(\mathbf{x}_0) = -\log(2\pi) - \frac{1}{2}(0.25 + 0.09) = -1.837 - 0.17 = -2.007$
+- 假设 Jacobian $= \begin{bmatrix} 2 & 0.5 \\ 0.1 & 1.5 \end{bmatrix}$，$\det = 2 \times 1.5 - 0.5 \times 0.1 = 2.95$
+- $\log|\det| = \log(2.95) = 1.082$
+- $\log \pi(\mathbf{a}|\mathbf{s}) = -2.007 - 1.082 = -3.089$
+
+空间被放大了约 3 倍 → 概率密度下降了 3 倍 → log 概率减少了 $\log 3 \approx 1.08$。
+
+> Jacobian 行列式计算 $O(d^3)$（完整），或用 Hutchinson estimator 近似到 $O(d)$。对于机器人动作维度（$d \leq 20$），精确计算通常可行。
 
 更重要的是——**BPTT 完全无压力**：
 

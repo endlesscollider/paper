@@ -11,7 +11,9 @@ onMounted(() => {
   // 只记录有 category 的文章页面（排除首页、标签页等）
   if (frontmatter.value.category) {
     const pageTitle = frontmatter.value.title || title.value || document.title
-    record(pageTitle, route.path)
+    // 去掉 .html 后缀，使 link 格式与 articles.data.mts 保持一致
+    const link = route.path.replace(/\.html$/, '')
+    record(pageTitle, link)
   }
 })
 </script>

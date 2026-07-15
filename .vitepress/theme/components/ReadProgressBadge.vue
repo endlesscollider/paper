@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { withBase } from 'vitepress'
 import { getAllProgress } from '../composables/useReadProgress'
 
 const props = defineProps({
@@ -12,29 +13,55 @@ const badgeClass = ref('')
 
 onMounted(() => {
   const allProgress = getAllProgress()
-  // normalize link: ensure it starts with / and has no trailing .html
-  let normalized = props.link
-  if (!normalized.endsWith('/') && !normalized.endsWith('.html')) {
-    normalized = normalized + '.html'
-  }
-  
-  // Try multiple path formats since VitePress routes can vary
+
+  // 生成所有可能的 key 格式
+  const basedLink = withBase(props.link)
   const candidates = [
     props.link,
     props.link + '.html',
     props.link + '/',
     props.link.replace(/\/$/, ''),
+    basedLink,
+    basedLink + '.html',
+    basedLink + '/',
+    basedLink.replace(/\/$/, ''),
   ]
-  
+
+  // 处理中文路径编码
+  const allCandidates = []
+  for (const c of candidates) {
+    allCandidates.push(c)
+    try {
+      const decoded = decodeURIComponent(c)
+      if (decoded !== c) allCandidates.push(decoded)
+    } catch {}
+    try {
+      const encoded = encodeURI(c)
+      if (encoded !== c) allCandidates.push(encoded)
+    } catch {}
+  }
+
   let found = 0
-  for (const candidate of candidates) {
+  for (const candidate of allCandidates) {
     if (allProgress[candidate]?.progress) {
       found = Math.max(found, allProgress[candidate].progress)
     }
   }
-  
+
+  // 模糊匹配 fallback
+  if (found === 0) {
+    const slug = props.link.split('/').pop()
+    if (slug) {
+      for (const [key, val] of Object.entries(allProgress)) {
+        if (val?.progress && (key.includes(slug) || key.includes(encodeURIComponent(slug)))) {
+          found = Math.max(found, val.progress)
+        }
+      }
+    }
+  }
+
   progress.value = found
-  
+
   if (found === 0) {
     label.value = '未浏览'
     badgeClass.value = 'badge-unread'

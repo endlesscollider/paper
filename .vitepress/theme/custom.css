@@ -252,3 +252,310 @@
 .dark .tag-count {
   background: rgba(255, 255, 255, 0.08);
 }
+
+
+/* ===== 公式复制功能 ===== */
+
+.katex-display {
+  position: relative;
+}
+
+.math-copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 6px;
+  background: var(--vp-c-bg);
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s, transform 0.15s;
+  z-index: 10;
+}
+
+.katex-display:hover .math-copy-btn {
+  opacity: 0.8;
+}
+
+.math-copy-btn:hover {
+  opacity: 1 !important;
+  background: var(--vp-c-bg-soft);
+  transform: scale(1.1);
+}
+
+.math-copy-btn.copied {
+  opacity: 1 !important;
+  background: var(--vp-c-green-soft, #d4edda);
+  border-color: var(--vp-c-green-1, #28a745);
+  color: var(--vp-c-green-1, #28a745);
+}
+
+/* 块级公式悬停效果 */
+.katex-display:hover {
+  background: var(--vp-c-bg-soft);
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+/* 块级公式复制成功闪烁 */
+.katex-display.math-block-copied {
+  background: var(--vp-c-green-soft, #d4edda) !important;
+  border-radius: 8px;
+  transition: background 0.3s;
+}
+
+/* 行内公式可点击样式 */
+.math-inline-copyable {
+  border-radius: 4px;
+  padding: 1px 2px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.math-inline-copyable:hover {
+  background: var(--vp-c-brand-soft);
+  box-shadow: 0 0 0 2px var(--vp-c-brand-soft);
+}
+
+/* 行内公式复制成功闪烁 */
+.math-inline-copyable.math-copied-flash {
+  background: var(--vp-c-green-soft, #d4edda);
+  box-shadow: 0 0 0 2px var(--vp-c-green-soft, #d4edda);
+}
+
+/* Toast 提示 */
+.math-copy-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--vp-c-bg-elv);
+  color: var(--vp-c-text-1);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--vp-c-border);
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 9999;
+  pointer-events: none;
+  max-width: 80vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.math-copy-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* 覆盖 KaTeX 默认的 user-select 行为 */
+/* KaTeX 渲染的 HTML 选中后复制是乱码，所以禁用原生选中，引导用户点击复制 */
+.katex {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+
+/* 暗色模式适配 */
+.dark .math-copy-toast {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.dark .katex-display:hover {
+  background: var(--vp-c-bg-alt);
+}
+
+.dark .katex-display.math-block-copied {
+  background: rgba(40, 167, 69, 0.15) !important;
+}
+
+
+/* ===== 图片点击放大 ===== */
+
+.vp-doc img {
+  cursor: zoom-in;
+  border-radius: 8px;
+}
+
+.image-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease;
+  overflow: hidden;
+}
+
+.image-zoom-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.image-zoom-stage {
+  cursor: default;
+  transform-origin: center center;
+  transition: transform 0.1s ease-out;
+  max-width: 92vw;
+  max-height: 92vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-zoom-img {
+  display: block;
+  max-width: 92vw;
+  max-height: 92vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.image-zoom-close {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.image-zoom-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.image-zoom-hint {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+
+/* ===== Mermaid 架构图/流程图点击放大 ===== */
+
+.mermaid-zoomable {
+  cursor: zoom-in;
+  transition: filter 0.2s;
+}
+
+.mermaid-zoomable:hover {
+  filter: brightness(0.97);
+}
+
+.mermaid-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease;
+  overflow: hidden;
+}
+
+.mermaid-zoom-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.mermaid-zoom-stage {
+  cursor: grab;
+  transform-origin: center center;
+  transition: transform 0.05s linear;
+  background: var(--vp-c-bg);
+  padding: 32px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.mermaid-zoom-stage svg {
+  display: block;
+}
+
+.mermaid-zoom-close {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.mermaid-zoom-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.mermaid-zoom-hint {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 14px;
+  border-radius: 20px;
+}
+
+
+/* ===== 全屏阅读模式（隐藏左右侧边栏） ===== */
+
+/* 把侧边栏宽度变量归零，导航栏 / 内容区的 padding 计算会自动跟着归零 */
+.focus-mode {
+  --vp-sidebar-width: 0px;
+}
+
+.focus-mode .VPSidebar,
+.focus-mode .VPLocalNav {
+  display: none !important;
+}
+
+.focus-mode .VPDoc .aside {
+  display: none !important;
+}
+
+.focus-mode .VPDoc.has-sidebar .content-container {
+  max-width: 900px !important;
+  margin: 0 auto !important;
+}
+
+.focus-mode .VPDoc .content {
+  max-width: none !important;
+  padding-left: 32px !important;
+  padding-right: 32px !important;
+}

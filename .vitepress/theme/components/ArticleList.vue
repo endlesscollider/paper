@@ -30,6 +30,7 @@ const filtered = computed(() => {
       :star="article.star"
       :category="article.category"
       :tags="article.tags"
+      :series="article.series"
     />
   </div>
 </template>

@@ -128,6 +128,7 @@ const tagStats = computed(() => {
       :star="item.star"
       :category="item.category"
       :tags="item.tags"
+      :series="item.series"
     />
   </div>
 </div>
@@ -147,6 +148,7 @@ const tagStats = computed(() => {
       :star="article.star"
       :category="article.category"
       :tags="article.tags"
+      :series="article.series"
     />
   </div>
 </div>
@@ -166,6 +168,7 @@ const tagStats = computed(() => {
       :star="article.star"
       :category="article.category"
       :tags="article.tags"
+      :series="article.series"
     />
   </div>
 </div>

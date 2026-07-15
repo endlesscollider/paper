@@ -10,26 +10,62 @@ const props = defineProps({
   category: { type: String, default: '' },
   tags: { type: Array, default: () => [] },
   showProgress: { type: Boolean, default: true },
+  series: { type: Object, default: null }, // { id, totalChapters, dir }
 })
 
 const progressLabel = ref('')
 const progressClass = ref('')
+const seriesLabel = ref('')
 
 onMounted(() => {
   if (!props.showProgress) return
 
   const allProgress = getAllProgress()
+
+  // 生成所有可能的 key 格式来匹配 localStorage 中的记录
+  // route.path 可能带 base（如 /paper/），也可能不带；可能有 .html 后缀
+  const basedLink = withBase(props.link)
   const candidates = [
     props.link,
     props.link + '.html',
     props.link + '/',
     props.link.replace(/\/$/, ''),
+    basedLink,
+    basedLink + '.html',
+    basedLink + '/',
+    basedLink.replace(/\/$/, ''),
   ]
 
+  // 也尝试 URL decode 后匹配（处理中文路径编码问题）
+  const decodedCandidates = []
+  for (const c of candidates) {
+    decodedCandidates.push(c)
+    try {
+      const decoded = decodeURIComponent(c)
+      if (decoded !== c) decodedCandidates.push(decoded)
+    } catch {}
+    try {
+      const encoded = encodeURI(c)
+      if (encoded !== c) decodedCandidates.push(encoded)
+    } catch {}
+  }
+
   let found = 0
-  for (const candidate of candidates) {
+  for (const candidate of decodedCandidates) {
     if (allProgress[candidate]?.progress) {
       found = Math.max(found, allProgress[candidate].progress)
+    }
+  }
+
+  // 如果直接匹配失败，尝试用路径末段（文件名）做模糊匹配
+  if (found === 0) {
+    const slug = props.link.split('/').pop()
+    if (slug) {
+      for (const [key, val] of Object.entries(allProgress)) {
+        if (val?.progress && (key.includes(slug) || key.includes(encodeURIComponent(slug)))) {
+          found = Math.max(found, val.progress)
+        }
+      }
     }
   }
 
@@ -40,11 +76,34 @@ onMounted(() => {
     progressLabel.value = '已读完'
     progressClass.value = 'progress-done'
   }
+
+  // 系列文章：计算已读章节数
+  if (props.series && props.series.totalChapters) {
+    const total = props.series.totalChapters
+    const seriesDir = props.series.dir
+    let readCount = 0
+
+    for (const [key, val] of Object.entries(allProgress)) {
+      if (val?.progress && val.progress >= 90 && key.includes(seriesDir)) {
+        // 排除 index 页面本身
+        const afterDir = key.slice(key.indexOf(seriesDir) + seriesDir.length)
+        if (afterDir && afterDir !== '/' && afterDir !== '') {
+          readCount++
+        }
+      }
+    }
+
+    if (readCount > 0) {
+      seriesLabel.value = `${readCount}/${total} 章`
+    } else {
+      seriesLabel.value = `共 ${total} 章`
+    }
+  }
 })
 </script>
 
 <template>
-  <a :href="withBase(link + '.html')" class="article-card">
+  <a :href="withBase(link.endsWith('.html') ? link : link + '.html')" class="article-card">
     <!-- 右上角浏览进度 -->
     <span v-if="progressLabel" class="card-progress" :class="progressClass">
       {{ progressLabel }}
@@ -58,6 +117,7 @@ onMounted(() => {
         </span>
       </div>
       <div class="article-meta">
+        <span v-if="seriesLabel" class="article-series-badge">📖 {{ seriesLabel }}</span>
         <span v-if="category" class="article-category">{{ category }}</span>
         <span v-for="tag in tags" :key="tag" class="article-tag">{{ tag }}</span>
       </div>
@@ -167,6 +227,20 @@ onMounted(() => {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.article-series-badge {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 10px;
+  background: #e8f4fd;
+  color: #1a73e8;
+  font-weight: 500;
+}
+
+:global(.dark) .article-series-badge {
+  background: #1a3a5c;
+  color: #64b5f6;
 }
 
 .article-category {
