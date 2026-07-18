@@ -1,82 +1,73 @@
 /**
- * 给页面中的 KaTeX 公式添加"点击复制 LaTeX 源码"功能
+ * 给页面中的数学公式添加"点击复制 LaTeX 源码"功能
  * 
- * 问题背景：KaTeX 将公式渲染为大量嵌套 <span>，导致鼠标选中后复制得到的是乱码。
+ * 问题背景：本站用 MathJax（markdown-it-mathjax3）渲染公式，公式最终变成纯 SVG
+ * 路径（<mjx-container><svg>...</svg></mjx-container>），渲染结果里没有任何
+ * 可选中的文本节点——鼠标拖选公式选不中任何字符，是 SVG 渲染的必然结果，不是
+ * bug，但也没法通过"允许原生选中"来解决。
  * 解决方案：
- *   1. 块级公式（$$...$$）：右上角显示复制按钮 + 点击整个公式即可复制
- *   2. 行内公式（$...$）：点击即可复制，鼠标悬停时有提示
- *   3. 复制的内容是原始 LaTeX 源码（从 KaTeX 的 annotation 标签中提取）
+ *   1. 在 .vitepress/config.mts 里，构建时把每个公式的原始 LaTeX 源码写入
+ *      <mjx-container> 的 data-tex 属性
+ *   2. 块级公式（display="true"）：右上角显示复制按钮 + 点击整个公式即可复制
+ *   3. 行内公式：点击即可复制，鼠标悬停时有提示
+ *   4. 复制的内容就是 data-tex 里保存的原始 LaTeX 源码
  */
 
 export function setupMathCopy() {
   if (typeof window === 'undefined') return
 
   const init = () => {
-    // ===== 块级公式（.katex-display）=====
-    const mathBlocks = document.querySelectorAll('.katex-display')
-    mathBlocks.forEach((block) => {
-      if (block.getAttribute('data-math-copy-init')) return
-      block.setAttribute('data-math-copy-init', '1')
+    const containers = document.querySelectorAll('mjx-container[data-tex]')
+    containers.forEach((el) => {
+      if (el.getAttribute('data-math-copy-init')) return
+      el.setAttribute('data-math-copy-init', '1')
 
-      const annotation = block.querySelector('annotation[encoding="application/x-tex"]')
-      if (!annotation) return
-      const latex = annotation.textContent || ''
+      const latex = el.getAttribute('data-tex') || ''
+      if (!latex) return
 
-      // 复制按钮
-      const btn = document.createElement('button')
-      btn.className = 'math-copy-btn'
-      btn.title = '复制 LaTeX 公式'
-      btn.textContent = '📋'
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation()
-        e.preventDefault()
-        copyAndFeedback(latex, btn, block as HTMLElement)
-      })
+      const container = el as HTMLElement
+      const isBlock = container.getAttribute('display') === 'true'
 
-      const container = block as HTMLElement
-      container.style.position = 'relative'
-      container.appendChild(btn)
+      if (isBlock) {
+        // ===== 块级公式：右上角复制按钮 + 整块可点击 =====
+        container.classList.add('math-block-copyable')
+        container.style.position = 'relative'
 
-      // 整个块点击也可以复制
-      container.style.cursor = 'pointer'
-      container.addEventListener('click', (e) => {
-        // 不要拦截复制按钮的点击
-        if ((e.target as HTMLElement).closest('.math-copy-btn')) return
-        copyAndFeedback(latex, btn, container)
-      })
-
-      // 添加 tooltip 提示
-      container.setAttribute('title', '点击复制 LaTeX 公式')
-    })
-
-    // ===== 行内公式（span.katex，但不在 .katex-display 内）=====
-    const inlineMaths = document.querySelectorAll('.katex:not(.katex-display .katex)')
-    inlineMaths.forEach((span) => {
-      if (span.getAttribute('data-math-copy-init')) return
-      span.setAttribute('data-math-copy-init', '1')
-
-      const annotation = span.querySelector('annotation[encoding="application/x-tex"]')
-      if (!annotation) return
-      const latex = annotation.textContent || ''
-
-      const el = span as HTMLElement
-      el.style.cursor = 'pointer'
-      el.setAttribute('title', '点击复制公式')
-      el.classList.add('math-inline-copyable')
-
-      el.addEventListener('click', (e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        navigator.clipboard.writeText(latex).then(() => {
-          // 短暂显示反馈
-          el.classList.add('math-copied-flash')
-          showToast('已复制: ' + (latex.length > 40 ? latex.slice(0, 40) + '...' : latex))
-          setTimeout(() => el.classList.remove('math-copied-flash'), 800)
-        }).catch(() => {
-          // fallback: 选中文本方式
-          fallbackCopy(latex)
+        const btn = document.createElement('button')
+        btn.className = 'math-copy-btn'
+        btn.title = '复制 LaTeX 公式'
+        btn.textContent = '📋'
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          copyAndFeedback(latex, btn, container)
         })
-      })
+        container.appendChild(btn)
+
+        container.style.cursor = 'pointer'
+        container.addEventListener('click', (e) => {
+          if ((e.target as HTMLElement).closest('.math-copy-btn')) return
+          copyAndFeedback(latex, btn, container)
+        })
+        container.setAttribute('title', '点击复制 LaTeX 公式')
+      } else {
+        // ===== 行内公式：点击整体即可复制 =====
+        container.classList.add('math-inline-copyable')
+        container.style.cursor = 'pointer'
+        container.setAttribute('title', '点击复制公式')
+
+        container.addEventListener('click', (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          navigator.clipboard.writeText(latex).then(() => {
+            container.classList.add('math-copied-flash')
+            showToast('已复制: ' + (latex.length > 40 ? latex.slice(0, 40) + '...' : latex))
+            setTimeout(() => container.classList.remove('math-copied-flash'), 800)
+          }).catch(() => {
+            fallbackCopy(latex)
+          })
+        })
+      }
     })
   }
 

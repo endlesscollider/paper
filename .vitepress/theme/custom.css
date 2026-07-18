@@ -254,9 +254,12 @@
 }
 
 
-/* ===== 公式复制功能 ===== */
+/* ===== 公式复制功能 =====
+ * 本站用 MathJax 渲染公式（mjx-container > svg），公式本身是矢量路径，
+ * 没有可选中的文本节点，所以用"点击复制原始 LaTeX 源码"代替原生选中复制。
+ */
 
-.katex-display {
+mjx-container.math-block-copyable {
   position: relative;
 }
 
@@ -279,7 +282,7 @@
   z-index: 10;
 }
 
-.katex-display:hover .math-copy-btn {
+mjx-container.math-block-copyable:hover .math-copy-btn {
   opacity: 0.8;
 }
 
@@ -297,14 +300,14 @@
 }
 
 /* 块级公式悬停效果 */
-.katex-display:hover {
+mjx-container.math-block-copyable:hover {
   background: var(--vp-c-bg-soft);
   border-radius: 8px;
   transition: background 0.2s;
 }
 
 /* 块级公式复制成功闪烁 */
-.katex-display.math-block-copied {
+mjx-container.math-block-copyable.math-block-copied {
   background: var(--vp-c-green-soft, #d4edda) !important;
   border-radius: 8px;
   transition: background 0.3s;
@@ -356,24 +359,16 @@
   transform: translateX(-50%) translateY(0);
 }
 
-/* 覆盖 KaTeX 默认的 user-select 行为 */
-/* KaTeX 渲染的 HTML 选中后复制是乱码，所以禁用原生选中，引导用户点击复制 */
-.katex {
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: pointer;
-}
-
 /* 暗色模式适配 */
 .dark .math-copy-toast {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-.dark .katex-display:hover {
+.dark mjx-container.math-block-copyable:hover {
   background: var(--vp-c-bg-alt);
 }
 
-.dark .katex-display.math-block-copied {
+.dark mjx-container.math-block-copyable.math-block-copied {
   background: rgba(40, 167, 69, 0.15) !important;
 }
 
@@ -558,4 +553,70 @@
   max-width: none !important;
   padding-left: 32px !important;
   padding-right: 32px !important;
+}
+
+
+/* ===== 分栏引用面板 (Ref Panel) ===== */
+
+/* 引用链接的视觉标记：告诉读者"点这个不会离开当前页面" */
+.vp-doc a.ref-link {
+  text-decoration-style: dashed;
+  text-underline-offset: 3px;
+}
+
+.vp-doc a.ref-link::after {
+  content: '⇲';
+  display: inline-block;
+  margin-left: 2px;
+  font-size: 0.75em;
+  opacity: 0.6;
+  transform: scaleX(-1);
+}
+
+/* 面板打开时：仿照全屏阅读模式，先把两侧原生侧边栏藏起来，
+   再把正文区往右侧面板宽度方向收窄，避免内容被面板盖住。
+   使用 CSS 变量控制收窄宽度，方便和 RefPanel.vue 里的面板宽度保持一致。 */
+:root {
+  --ref-panel-width: 42vw;
+}
+
+@media (max-width: 1600px) {
+  :root {
+    --ref-panel-width: 480px;
+  }
+}
+
+.ref-panel-open .VPSidebar,
+.ref-panel-open .VPLocalNav {
+  display: none !important;
+}
+
+.ref-panel-open .VPDoc .aside {
+  display: none !important;
+}
+
+/* 关键：--vp-sidebar-width 同时被 .VPContent（控制 padding-left）和
+   .VPDoc（控制 aside 布局）用到，两者是兄弟/父子关系而非嵌套关系，
+   必须在两者共同的祖先 <html> 上覆盖这个变量才能同时影响到它们
+   （这也是 focus-mode 的做法，这里保持一致）。 */
+html.ref-panel-open {
+  --vp-sidebar-width: 0px;
+}
+
+.ref-panel-open .VPDoc .content {
+  max-width: calc(100vw - var(--ref-panel-width)) !important;
+  margin: 0 !important;
+  padding-right: 32px !important;
+}
+
+.ref-panel-open .VPDoc.has-sidebar .content-container {
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+@media (max-width: 960px) {
+  /* 小屏上面板是从底部升起的抽屉，不需要挤压正文宽度 */
+  .ref-panel-open .VPDoc.has-sidebar .content-container {
+    max-width: 100% !important;
+  }
 }

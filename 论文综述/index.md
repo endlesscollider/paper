@@ -40,6 +40,8 @@
 - [FlowRL：Flow VLA 的在线 RL 微调](./018_FlowRL_Flow_VLA的在线RL微调) — 解决 Flow Matching 的 log-prob 不可算问题
 - [TGRPO：轨迹级 GRPO 微调 VLA](./019_TGRPO_轨迹级GRPO微调VLA) — 里程碑密集奖励 + 课程学习
 - [GRAPE：偏好对齐 VLA 泛化](./020_GRAPE_偏好对齐VLA泛化) — DPO + GPT-4V 生成 cost function，泛化最强
+- [Q-Chunking：用动作分块加速离线到在线 RL](./071_QChunking_RL与动作分块) — NeurIPS 2025，用动作分块同时解决探索和 n 步 TD 偏差问题
+- [Adaptive Q-Chunking：让分块长度随状态自适应](./072_AdaptiveQChunking_自适应动作分块长度) — 2026，用折扣归一化 advantage 准则让 chunk 长度随状态自适应，可增强冻结的大规模 VLA
 
 ### 机器人数据与预训练模型
 
@@ -53,3 +55,7 @@
 - [RT-2：视觉-语言-动作模型](./018_RT2_视觉语言动作模型) — CoRL 2023，定义 VLA 范式的里程碑
 - [GR00T N1：人形机器人基础模型](./019_GR00T_N1_人形机器人基础模型) — 2025，NVIDIA 双系统人形基础模型
 - [LeRobot：开源端到端机器人学习库](./020_LeRobot_开源端到端机器人学习库) — 2025，Hugging Face 的全链路开源库
+
+### 等变神经网络与凝聚态物理机器学习
+
+- [晶格系统的等变神经网络力场](./073_ENN_Lattice_晶格系统等变神经网络力场) — 2026，把离散点群对称性直接嵌入网络架构，用于凝聚态格点模型的力场建模

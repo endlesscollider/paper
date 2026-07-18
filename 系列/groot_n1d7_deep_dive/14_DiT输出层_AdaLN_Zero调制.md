@@ -80,6 +80,8 @@ self.proj_out_1 = nn.Linear(self.inner_dim, 2 * self.inner_dim)  # 生成 scale+
 self.proj_out_2 = nn.Linear(self.inner_dim, self.output_dim)    # 最终维度投影
 ```
 
+有了这三个组件，`forward()` 末尾的调用顺序就是"先归一化、再调制、最后投影"三步走：
+
 ```python
 # 在 forward() 的末尾：
 conditioning = temb  # [B, 1536]，和中间层用的是同一个 temb

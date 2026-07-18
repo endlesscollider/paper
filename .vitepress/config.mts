@@ -3,6 +3,7 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 import fs from 'node:fs'
 import path from 'node:path'
 import matter from 'gray-matter'
+import { refSectionsPlugin, generateRefSections } from './refSectionsPlugin.mts'
 
 // --- 自动 sidebar 生成 ---
 
@@ -206,6 +207,17 @@ function scanSeriesSidebar(): Record<string, SidebarGroup[]> {
   return result
 }
 
+/**
+ * 转义 LaTeX 源码，使其可以安全地放进 HTML 属性（data-tex="..."）
+ */
+function escapeTexForAttr(tex: string): string {
+  return tex
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 // --- 配置 ---
 
 export default withMermaid(defineConfig({
@@ -312,10 +324,52 @@ export default withMermaid(defineConfig({
 
   markdown: {
     lineNumbers: true,
-    math: true
+    math: true,
+    // 给每个公式的 <mjx-container> 注入 data-tex 属性，保存原始 LaTeX 源码。
+    // MathJax 把公式渲染成纯 SVG 路径，渲染结果里根本没有可选中的文本，
+    // 所以"点击复制公式"功能必须依赖这个属性才能拿到原始 LaTeX。
+    config: (md) => {
+      const wrap = (renderRule: any) => {
+        return (tokens: any, idx: number, options2: any, env: any, self: any) => {
+          const html = renderRule(tokens, idx, options2, env, self)
+          const tex = escapeTexForAttr(tokens[idx].content ?? '')
+          return html.replace(/^<mjx-container /, `<mjx-container data-tex="${tex}" `)
+        }
+      }
+      if (md.renderer.rules.math_inline) {
+        md.renderer.rules.math_inline = wrap(md.renderer.rules.math_inline)
+      }
+      if (md.renderer.rules.math_block) {
+        md.renderer.rules.math_block = wrap(md.renderer.rules.math_block)
+      }
+    }
   },
 
   mermaid: {
     // mermaid options
+  },
+
+  vite: {
+    plugins: [
+      // “分栏引用”功能 dev 模式下的即时渲染中间件，
+      // 详见 .vitepress/refSectionsPlugin.mts 顶部注释。
+      refSectionsPlugin({
+        srcDir: path.resolve(__dirname, '..'),
+        base: process.env.GITHUB_ACTIONS ? '/paper/' : '/',
+        markdown: { math: true }
+      })
+    ]
+  },
+
+  // build 模式下生成"分栏引用"功能所需的静态 JSON 索引。
+  // 必须用 VitePress 顶层的 buildEnd(siteConfig) 钩子而不是 vite 插件的
+  // buildEnd 钩子，原因见 refSectionsPlugin.mts 顶部注释。
+  async buildEnd(siteConfig) {
+    await generateRefSections({
+      srcDir: path.resolve(__dirname, '..'),
+      base: process.env.GITHUB_ACTIONS ? '/paper/' : '/',
+      markdown: { math: true },
+      outDir: siteConfig.outDir
+    })
   }
 }))
