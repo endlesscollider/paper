@@ -73,7 +73,7 @@ algorithm:
 
 ### 2.4 为什么 SAC 天然适合异步模式
 
-回顾 [第 07 章](./07_Runner训练循环#三异步模式不再互相等待)讲过的同步/异步之分：同步模式要求"采集完一批，训练一步，再采集下一批"，这对 on-policy 算法（PPO/GRPO）是必须的，因为它们要求训练用的数据必须是当前策略产出的。但 SAC 本来就设计成可以用历史数据训练——Replay Buffer 里本身就混着不同时期采集的数据,"数据新不新鲜"这个问题对 SAC 来说不是必须严格保证的约束。所以 SAC 几乎总是配合异步 Runner（`AsyncEmbodiedSACFSDPPolicy`）使用：Env+Rollout 持续往 Buffer 里灌数据，Actor 持续从 Buffer 里采样训练，两条线完全不用互相等待。
+回顾 [第 07 章](./07_Runner训练循环#三-异步模式-不再互相等待)讲过的同步/异步之分：同步模式要求"采集完一批，训练一步，再采集下一批"，这对 on-policy 算法（PPO/GRPO）是必须的，因为它们要求训练用的数据必须是当前策略产出的。但 SAC 本来就设计成可以用历史数据训练——Replay Buffer 里本身就混着不同时期采集的数据,"数据新不新鲜"这个问题对 SAC 来说不是必须严格保证的约束。所以 SAC 几乎总是配合异步 Runner（`AsyncEmbodiedSACFSDPPolicy`）使用：Env+Rollout 持续往 Buffer 里灌数据，Actor 持续从 Buffer 里采样训练，两条线完全不用互相等待。
 
 ## 三、DAgger：没有奖励函数，靠专家纠错
 

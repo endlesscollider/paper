@@ -138,7 +138,7 @@ def wrap_model(self, model, device_mesh):
     return fsdp2_model
 ```
 
-`apply_fsdp2_to_model` 内部会先找出模型里"哪些子模块要按层切"（通常是 Transformer 的 `DecoderLayer` 类，靠模型自带的 `_no_split_modules` 属性识别），对每一个这样的子模块单独调用 `fully_shard()`，最后再对整个模型调用一次 `fully_shard()`（这次 `reshard_after_forward` 强制设为 `False`，原因见 [前置知识 4 节](/前置知识/001i_前置知识_FSDP全分片数据并行#四-reshard-after-forward-一个关键的权衡开关)：最外层反向传播马上就要用到，没必要立刻释放）。
+`apply_fsdp2_to_model` 内部会先找出模型里"哪些子模块要按层切"（通常是 Transformer 的 `DecoderLayer` 类，靠模型自带的 `_no_split_modules` 属性识别），对每一个这样的子模块单独调用 `fully_shard()`，最后再对整个模型调用一次 `fully_shard()`（这次 `reshard_after_forward` 强制设为 `False`，原因见 [前置知识 4 节](/前置知识/001i_前置知识_FSDP全分片数据并行#四-reshard_after_forward-一个关键的权衡开关)：最外层反向传播马上就要用到，没必要立刻释放）。
 
 ```python
 for name, submodule in module.named_modules():
@@ -172,7 +172,7 @@ actor:
 
 ## 五、微批量训练：梯度累积与 before_micro_batch
 
-Actor Worker 的训练循环要处理一个常见约束：想要的 `global_batch_size` 往往比单卡显存能承受的 batch 更大，只能拆成多个 micro-batch 依次算，梯度在本地累积，最后统一更新一次参数。这正是 [前置知识里 no_sync() 的应用场景](/前置知识/001h_前置知识_数据并行与AllReduce基础#41-no-sync-暂停梯度同步)：非最后一个 micro-batch 不应该触发梯度同步，否则通信次数会白白增加几倍。
+Actor Worker 的训练循环要处理一个常见约束：想要的 `global_batch_size` 往往比单卡显存能承受的 batch 更大，只能拆成多个 micro-batch 依次算，梯度在本地累积，最后统一更新一次参数。这正是 [前置知识里 no_sync() 的应用场景](/前置知识/001h_前置知识_数据并行与AllReduce基础#4.1-no_sync-暂停梯度同步)：非最后一个 micro-batch 不应该触发梯度同步，否则通信次数会白白增加几倍。
 
 RLinf 用 `before_micro_batch` 这个上下文管理器统一处理这件事,FSDP1 和 FSDP2 的底层机制不同(`no_sync()` vs `set_requires_gradient_sync`),但接口一致,训练代码不需要关心用的是哪个版本:
 

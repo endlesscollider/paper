@@ -149,6 +149,11 @@ $$
 导数恰好是常数 $a - \epsilon$，不依赖 $t$！这就是直线路径的美妙之处——
 速度场是常数，模型只需要学一个与时间无关的映射。
 
+> **这里可能会有一个疑问**：推理时根本不知道真实动作 $a$，凭什么用"知道 $a$"算出来的
+> $a-\epsilon$ 当训练目标，最后网络在不知道 $a$ 时还能生成对？这是 Flow Matching 能成立
+> 的核心数学原理（条件期望 = 边际向量场），不是本章的重点，完整推导见
+> [Flow Matching 与连续归一化流 · 3.2.1 节](/前置知识/000g_前置知识_Flow_Matching与连续归一化流#3.2.1-关键疑问-训练时回归的是-条件速度-为什么推理时能生成正确样本)。
+
 ---
 
 ## 3. 训练过程：在 GR00T 中的实现
@@ -171,41 +176,89 @@ $$
 
 ### 3.2 对应的代码实现
 
+**⚠️ 一个常见的疑问先在这里说清楚**：Flow Matching 去噪的到底是"原始 132 维动作"，
+还是某个编码后的隐藏表示？下面把 `action_encoder`（第15章）和 `action_decoder`
+（第17章）也放进来，完整展示这一步：
+
 ```python
 # 在 Gr00tN1d7ActionHead.forward() 中：
 
-# 1. 采样噪声
+# 1. 采样噪声 —— 132维，原始物理动作空间
 noise = torch.randn(actions.shape, device=actions.device, dtype=actions.dtype)
+# noise: [B, 40, 132]
 
 # 2. 采样时间步 (从 Beta 分布)
 t = self.sample_time(actions.shape[0], device=actions.device, dtype=actions.dtype)
 t = t[:, None, None]  # [B, 1, 1] for broadcast
 
-# 3. 构造带噪声的轨迹 (直线插值)
+# 3. 构造带噪声的轨迹 (直线插值) —— 仍然是132维！
 noisy_trajectory = (1 - t) * noise + t * actions
+# noisy_trajectory: [B, 40, 132]
 
-# 4. 计算真实速度 (训练目标)
+# 4. 计算真实速度 (训练目标) —— 同样是132维，和 noisy_trajectory 同一个空间
 velocity = actions - noise
+# velocity: [B, 40, 132]
 
-# 5. 网络预测速度
+# ↓↓↓ 下面这一段是文章前面省略掉、但实际发生的中间步骤 ↓↓↓
+
+# 5. 【编码】把132维的noisy_trajectory（注意：这是用真实actions和noise
+#    混合出来的带噪动作，不是凌空出现的新东西）投影成DiT能处理的1536维
+action_features = self.action_encoder(noisy_trajectory, t_discretized, embodiment_id)
+# action_features: [B, 40, 1536]  （第15章 ActionEncoder）
+
+# 6. DiT 前向传播（32层，混合了state/action/VL特征的attention计算）
+model_output, _ = self.model(hidden_states=..., encoder_hidden_states=vl_embeds, ...)
+# model_output: [B, 41, 1024]
+
+# 7. 【解码】把DiT输出的1024维特征"翻译"回132维，这才是最终要拿去和velocity比较的东西
 pred = self.action_decoder(model_output, embodiment_id)
 pred_actions = pred[:, -actions.shape[1]:]
+# pred_actions: [B, 40, 132]  （第17章 ActionDecoder）
 
-# 6. MSE Loss (带 mask)
+# 8. MSE Loss (带 mask) —— loss在132维空间计算，velocity也是132维
 action_loss = F.mse_loss(pred_actions, velocity, reduction="none") * action_mask
 loss = action_loss.sum() / (action_mask.sum() + 1e-6)
 ```
 
+**理清这段代码里到底谁是谁，避免混淆**：
+
+| 变量 | 是什么 | 是否进入网络（encoder/DiT） |
+|------|--------|---------------------------|
+| `actions` | 真实动作（132维） | ❌ 不直接进入，只用来算 `noisy_trajectory` 和 `velocity` |
+| `noise` | 随机噪声（132维） | ❌ 不直接进入，只用来算 `noisy_trajectory` 和 `velocity` |
+| `noisy_trajectory` | `actions` 和 `noise` 按 $t$ 混合出的点（132维） | ✅ **这是唯一真正喂进 encoder 的东西** |
+| `velocity` | `actions - noise`，训练目标（132维） | ❌ 从不进入网络，只在最后算 `MSE(pred_actions, velocity)` 时出现 |
+| `action_features` | `noisy_trajectory` 编码后的 1536 维表示 | ✅ 是 encoder 的输出，DiT 的输入 |
+| `pred_actions` | DiT+decoder 算出来的"预测速度"（132维） | 是网络的最终输出，拿去跟 `velocity` 比较 |
+
+**直接回答"编码的是不是训练目标"**：不是。被编码（132→1536维）的是 `noisy_trajectory`——
+它是用真实 `actions` 和 `noise` 混合出来的一个中间点，**不是** `velocity`（训练目标）
+也不是 `actions` 本身。`velocity` 全程只在最后一行的 loss 计算里出现过一次，从未被
+传给 encoder 或 DiT。
+
+编码（第5步）→ DiT（第6步）→ 解码（第7步）这条链路，只是"如何用网络算出
+`pred_actions`"的具体实现细节，和公式 $v_\theta(x_t,t,c)$ 是同一件事：
+$v_\theta$ 就是"编码→DiT→解码"这个复合函数。`pred_actions` 解码回 132 维之后，
+才拿去和 132 维的 `velocity` 算 loss——MSE 比较永远发生在原始动作空间，
+1536/1024 维的中间表示不会出现在 loss 计算里，也不会跨训练/推理的多个时间步
+被保留下来（每一步都要重新编码、重新过DiT、重新解码，第23章会讲这一点）。
+
 ### 3.3 代码与公式的对应关系
 
-| 代码 | 对应的数学 | 形状 |
-|------|-----------|------|
-| `noise` | $\epsilon \sim \mathcal{N}(0, I)$ | [B, 40, 132] |
-| `t` | $t \sim \text{Beta}(1.5, 1.0)$ | [B, 1, 1] |
-| `noisy_trajectory` | $x_t = (1-t)\epsilon + ta$ | [B, 40, 132] |
-| `velocity` | $v^* = a - \epsilon$ | [B, 40, 132] |
-| `pred_actions` | $v_\theta(x_t, t, c)$ | [B, 40, 132] |
-| `action_loss` | $\|v_\theta - v^*\|^2$ | [B, 40, 132] |
+| 代码 | 对应的数学 | 形状 | 是否为原始动作空间 |
+|------|-----------|------|------|
+| `noise` | $\epsilon \sim \mathcal{N}(0, I)$ | [B, 40, 132] | ✅ 是 |
+| `t` | $t \sim \text{Beta}(1.5, 1.0)$ | [B, 1, 1] | — |
+| `noisy_trajectory` | $x_t = (1-t)\epsilon + ta$ | [B, 40, 132] | ✅ 是 |
+| `velocity` | $v^* = a - \epsilon$（训练目标） | [B, 40, 132] | ✅ 是 |
+| `action_features` | $\text{Encoder}(x_t, t)$（DiT输入，中间表示） | [B, 40, 1536] | ❌ 否，临时表示 |
+| `model_output` | $\text{DiT}(\cdots)$（中间表示） | [B, 41, 1024] | ❌ 否，临时表示 |
+| `pred_actions` | $v_\theta(x_t, t, c)$（解码回原始空间后的预测） | [B, 40, 132] | ✅ 是 |
+| `action_loss` | $\|v_\theta - v^*\|^2$ | [B, 40, 132] | ✅ 是（loss在这里算） |
+
+> 完整的编码器/解码器实现细节参见
+> [ActionEncoder：动作轨迹+时间步的联合编码](./15_ActionEncoder_动作轨迹时间步联合编码)
+> 和 [StateEncoder 与 ActionDecoder](./17_StateEncoder与ActionDecoder)。
 
 ---
 

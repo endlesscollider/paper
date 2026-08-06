@@ -125,7 +125,7 @@ $$
 
 ## 五、GRPO 的 loss：仍然是 PPO 的 clip，只是没有 Critic loss
 
-前几节讲的都是"优势怎么算"这一半，优势算出来之后，用它去更新策略网络的方式，GRPO 和 PPO 完全一样——都是 [上一章](./08_算法实现_PPO配置详解#三ppo-clip限制策略一步能走多远)讲过的 ratio clip 机制。区别只体现在配置的 `loss_type` 上：
+前几节讲的都是"优势怎么算"这一半，优势算出来之后，用它去更新策略网络的方式，GRPO 和 PPO 完全一样——都是 [上一章](./08_算法实现_PPO配置详解#三-ppo-clip-限制策略一步能走多远)讲过的 ratio clip 机制。区别只体现在配置的 `loss_type` 上：
 
 ```yaml
 algorithm:

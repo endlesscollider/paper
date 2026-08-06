@@ -119,7 +119,7 @@ FSDP1（老版 API）里有一个 `sharding_strategy` 选项，决定"参数、�
 
 ## 七、梯度累积时的同步控制
 
-和 [DDP 的 `no_sync()`](/前置知识/001h_前置知识_数据并行与AllReduce基础#41-no-sync-暂停梯度同步) 一样，FSDP 在做梯度累积（把一个大 batch 拆成多个 micro-batch）时，也需要一个"先不同步梯度"的开关。
+和 [DDP 的 `no_sync()`](/前置知识/001h_前置知识_数据并行与AllReduce基础#4.1-no_sync-暂停梯度同步) 一样，FSDP 在做梯度累积（把一个大 batch 拆成多个 micro-batch）时，也需要一个"先不同步梯度"的开关。
 
 FSDP1 直接复用了 `model.no_sync()`。FSDP2 因为内部实现方式不同（用 `fully_shard()` 包装每一层，而不是把整个模型包一层），提供的是 `model.set_requires_gradient_sync(False)`——原理完全一样：非最后一个 micro-batch 时关闭梯度的 Reduce-Scatter，只在本地累加；到最后一个 micro-batch 才打开同步，做一次 Reduce-Scatter 把累积的梯度分发好。
 

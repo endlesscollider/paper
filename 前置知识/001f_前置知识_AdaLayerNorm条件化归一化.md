@@ -11,6 +11,7 @@ category: 前置知识
 
 ## 相关阅读
 
+- [DiT：Diffusion Transformer 架构](/前置知识/002x_前置知识_DiT_Diffusion_Transformer架构)
 - [Cross-Attention 与交替注意力](/前置知识/001e_前置知识_Cross_Attention与交替注意力机制)
 - [Flow Matching 数学基础](/系列/groot_n1d7_deep_dive/09_Flow_Matching数学基础)
 - [GR00T N1.7 - DiT 架构](/系列/groot_n1d7_deep_dive/11_DiT架构逐层拆解)

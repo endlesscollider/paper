@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "docs:dev": "vitepress dev",
-    "docs:build": "vitepress build",
+    "docs:dev": "NODE_OPTIONS=--max-old-space-size=8192 vitepress dev",
+    "docs:build": "NODE_OPTIONS=--max-old-space-size=8192 vitepress build",
     "docs:preview": "vitepress preview"
   },
   "keywords": [],

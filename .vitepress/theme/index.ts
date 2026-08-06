@@ -7,6 +7,8 @@ import ReadProgressBadge from './components/ReadProgressBadge.vue'
 import RecordVisit from './components/RecordVisit.vue'
 import FocusModeToggle from './components/FocusModeToggle.vue'
 import RefPanel from './components/RefPanel.vue'
+import SidebarToggle from './components/SidebarToggle.vue'
+import PrereqSearch from './components/PrereqSearch.vue'
 import './custom.css'
 import { h, onMounted, onUnmounted } from 'vue'
 import { setupMathCopy } from './composables/useMathCopy'
@@ -22,6 +24,7 @@ export default {
     app.component('ArticleList', ArticleList)
     app.component('ArticleCard', ArticleCard)
     app.component('ReadProgressBadge', ReadProgressBadge)
+    app.component('PrereqSearch', PrereqSearch)
 
     if (typeof window !== 'undefined') {
       // 路由切换后重新初始化公式复制功能
@@ -40,7 +43,7 @@ export default {
   Layout() {
     return h(DefaultTheme.Layout, null, {
       'doc-before': () => [h(ReadProgressBar), h(RecordVisit)],
-      'layout-bottom': () => [h(FocusModeToggle), h(RefPanel)],
+      'layout-bottom': () => [h(FocusModeToggle), h(RefPanel), h(SidebarToggle)],
     })
   },
   setup() {

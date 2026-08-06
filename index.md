@@ -55,10 +55,10 @@ const topArticles = computed(() => {
     .slice(0, 6)
 })
 
-// 最新文章（按 order 降序 = 编号越大越新）
+// 最新文章（按 lastUpdated 降序 = 最近修改的排最前）
 const latestArticles = computed(() => {
   return [...articles]
-    .sort((a, b) => b.order - a.order)
+    .sort((a, b) => b.lastUpdated - a.lastUpdated)
     .slice(0, 6)
 })
 

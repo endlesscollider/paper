@@ -40,7 +40,7 @@ if _step % self.weight_sync_interval == 0:
 
 `weight_sync_interval` 默认是 1（每步都同步）。调大这个值可以省下同步权重的通信开销，但代价是 Rollout 会用稍微过时的策略采集好几步的数据——这是训练速度和数据"新鲜度"之间的权衡，配置在 `runner.weight_sync_interval` 里。
 
-**阶段二：采集数据**。Env 和 Rollout 交替工作（Env 给观测，Rollout 出动作，Env 再执行动作），这个过程在 [第 05 章](./05_数据流与通信机制#阶段-3env-积累轨迹) 已经详细讲过数据怎么流转，这里 Runner 要做的只是把两个 Worker 启动起来、等它们都跑完：
+**阶段二：采集数据**。Env 和 Rollout 交替工作（Env 给观测，Rollout 出动作，Env 再执行动作），这个过程在 [第 05 章](./05_数据流与通信机制#阶段-3-env-积累轨迹) 已经详细讲过数据怎么流转，这里 Runner 要做的只是把两个 Worker 启动起来、等它们都跑完：
 
 ```python
 env_handle = self.env.interact(input_channel=self.env_channel, ...)
@@ -165,7 +165,7 @@ alpha = torch.clamp(version_gap / version_diff, 0.0, 1.0)
 
 ## 五、Checkpoint 存到哪、存什么
 
-保存 checkpoint 由 `_save_checkpoint()` 触发，按当前的 `global_step` 生成一个独立目录，实际的存储动作委托给 [上一章](./06_训练后端_FSDP与Megatron#七checkpoint分片存-vs-完整存) 讲过的 Actor 的 `save_checkpoint` 接口：
+保存 checkpoint 由 `_save_checkpoint()` 触发，按当前的 `global_step` 生成一个独立目录，实际的存储动作委托给 [上一章](./06_训练后端_FSDP与Megatron#七-checkpoint-分片存-vs-完整存) 讲过的 Actor 的 `save_checkpoint` 接口：
 
 ```python
 base_output_dir = os.path.join(log_path, experiment_name, f"checkpoints/global_step_{self.global_step}")

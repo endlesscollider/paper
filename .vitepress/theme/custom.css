@@ -1,17 +1,120 @@
+/* ===== 减少正文两侧留白，让文章利用更多屏幕宽度 =====
+ * VitePress 默认主题有两层"居中留白"叠在一起：
+ * 1. --vp-layout-max-width 默认 1440px：导航栏/侧边栏/正文这一整块区域
+ *    在宽屏（或双屏、超宽屏）下会被限制在 1440px 内并居中，屏幕越宽，
+ *    左右两侧被浪费掉的留白就越大。这里把它调大，减少这层外层留白。
+ * 2. .content-container 在有大纲(TOC)的文章页上被硬编码限制在 688px：
+ *    这是文字排版的"每行不要太长"限制，但 688px 在宽屏下过于保守，
+ *    导致侧边栏和大纲之间夹着的正文列里，文字两侧还留了一大截空白。
+ *    这里放宽到 min(1100px, 92%)，既明显变宽，又不会在超宽屏上把每行
+ *    拉到无法阅读的长度。
+ * VPDoc.vue 的这些规则写在 Vue SFC 的 scoped style 里，编译后会被加上
+ * data-v-xxx 属性选择器，优先级比普通类选择器高，所以这里必须用
+ * !important 才能覆盖生效。
+ */
+:root {
+  --vp-layout-max-width: 1800px;
+  /* 左侧边栏宽度设为默认的 1.2 倍（默认 272px） */
+  --vp-sidebar-width: 340px;
+}
+
+/* 右侧 aside 宽度放大到 1.2 倍（默认 256px → 307px） */
+@media (min-width: 1280px) {
+  .VPDoc .aside {
+    max-width: 307px !important;
+  }
+  .VPDoc .aside .aside-container {
+    width: 269px !important;
+  }
+}
+
+/* ===== 左侧栏折叠 ===== */
+html.sidebar-left-collapsed {
+  --vp-sidebar-width: 0px;
+}
+
+html.sidebar-left-collapsed .VPSidebar {
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ===== 右侧栏折叠 ===== */
+html.sidebar-right-collapsed .VPDoc .aside {
+  display: none !important;
+}
+
+html.sidebar-right-collapsed .VPDoc.has-aside .content-container {
+  max-width: min(1300px, 94%) !important;
+}
+
+/* 侧边栏过渡动画 */
+.VPSidebar {
+  transition: transform 0.3s ease, opacity 0.3s ease !important;
+}
+
+/* 让侧边栏从导航栏下方开始，不再延伸到顶栏区域 */
+@media (min-width: 960px) {
+  .VPSidebar {
+    top: var(--vp-nav-height, 64px) !important;
+    padding-top: 16px !important;
+  }
+}
+
+/* 侧边栏内文字允许换行，减小内边距以留出更多文字空间 */
+@media (min-width: 960px) {
+  .VPSidebar {
+    padding-left: 20px !important;
+    padding-right: 16px !important;
+    overflow-x: hidden !important;
+    /* 不能 overflow-x: visible，否则水平滚动条出现 */
+  }
+  /* 根本原因：VitePress scoped CSS 给 .group 设了 width: calc(sidebar-width - 64px)
+     这导致文字被固定宽度裁切。覆盖为 auto 让内容自适应 */
+  .VPSidebar .group {
+    width: auto !important;
+    max-width: 100% !important;
+  }
+  .VPSidebar nav {
+    overflow: visible !important;
+    width: 100% !important;
+  }
+}
+
+.VPDoc.has-aside .content-container {
+  max-width: min(1300px, 96%) !important;
+}
+
+@media (min-width: 960px) {
+  .VPDoc:not(.has-sidebar) .content {
+    max-width: min(1000px, 92%) !important;
+  }
+}
+
+@media (min-width: 1440px) {
+  .VPDoc:not(.has-sidebar) .content {
+    max-width: min(1100px, 92%) !important;
+  }
+
+  .VPDoc:not(.has-sidebar) .container {
+    max-width: 1300px !important;
+  }
+}
+
 /* 全局页面内容区页边距 */
 .vp-doc {
-  padding: 0 32px;
+  padding: 0 20px;
 }
 
 @media (min-width: 960px) {
   .vp-doc {
-    padding: 0 48px;
+    padding: 0 28px;
   }
 }
 
 @media (min-width: 1280px) {
   .vp-doc {
-    padding: 0 64px;
+    padding: 0 36px;
   }
 }
 
@@ -378,6 +481,26 @@ mjx-container.math-block-copyable.math-block-copied {
 .vp-doc img {
   cursor: zoom-in;
   border-radius: 8px;
+  transition: all 0.2s ease;
+  max-width: min(100%, 560px);
+  height: auto;
+  display: block;
+  margin: 1em auto;
+}
+
+/* 内容丰富的大图（对比图、多子图等）可以用 HTML <img class="img-wide"> 放大 */
+.vp-doc img.img-wide {
+  max-width: min(100%, 780px);
+}
+
+/* 需要全宽的图（架构图、时间线等）*/
+.vp-doc img.img-full {
+  max-width: 100%;
+}
+
+.vp-doc img:hover {
+  filter: brightness(0.95);
+  box-shadow: 0 0 0 2px var(--vp-c-brand-soft);
 }
 
 .image-zoom-overlay {
@@ -392,6 +515,7 @@ mjx-container.math-block-copyable.math-block-copied {
   visibility: hidden;
   transition: opacity 0.2s ease;
   overflow: hidden;
+  backdrop-filter: blur(4px);
 }
 
 .image-zoom-overlay.open {
@@ -456,18 +580,39 @@ mjx-container.math-block-copyable.math-block-copied {
 
 .mermaid-zoomable {
   cursor: zoom-in;
-  transition: filter 0.2s;
+  transition: all 0.2s ease;
+  position: relative;
 }
 
 .mermaid-zoomable:hover {
-  filter: brightness(0.97);
+  filter: brightness(0.95);
+  box-shadow: 0 0 0 2px var(--vp-c-brand-soft);
+  border-radius: 8px;
+}
+
+.mermaid-zoomable::after {
+  content: '🔍';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.mermaid-zoomable:hover::after {
+  opacity: 1;
 }
 
 .mermaid-zoom-overlay {
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -475,6 +620,7 @@ mjx-container.math-block-copyable.math-block-copied {
   visibility: hidden;
   transition: opacity 0.2s ease;
   overflow: hidden;
+  backdrop-filter: blur(4px);
 }
 
 .mermaid-zoom-overlay.open {
@@ -490,6 +636,9 @@ mjx-container.math-block-copyable.math-block-copied {
   padding: 32px;
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
 }
 
 .mermaid-zoom-stage svg {
@@ -500,19 +649,26 @@ mjx-container.math-block-copyable.math-block-copied {
   position: absolute;
   top: 20px;
   right: 24px;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 10;
 }
 
 .mermaid-zoom-close:hover {
   background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
 
 .mermaid-zoom-hint {
@@ -520,11 +676,14 @@ mjx-container.math-block-copyable.math-block-copied {
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.85);
   font-size: 13px;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 8px 16px;
   border-radius: 20px;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 
@@ -544,15 +703,39 @@ mjx-container.math-block-copyable.math-block-copied {
   display: none !important;
 }
 
-.focus-mode .VPDoc.has-sidebar .content-container {
-  max-width: 900px !important;
-  margin: 0 auto !important;
+/* 核心修复：逐层覆盖 VitePress scoped CSS 的宽度限制 */
+
+/* Layer 1: VPContent — 去掉为 sidebar 预留的 padding */
+.focus-mode .VPContent.has-sidebar {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin: var(--vp-layout-top-height, 0px) auto 0 !important;
 }
 
+/* Layer 2: VPDoc 自身的 padding */
+.focus-mode .VPDoc {
+  padding: 48px 0 0 !important;
+}
+
+/* Layer 3: .container — 不限宽，居中 */
+.focus-mode .VPDoc .container {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Layer 4: .content — 这是正文列 */
 .focus-mode .VPDoc .content {
-  max-width: none !important;
-  padding-left: 32px !important;
-  padding-right: 32px !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+}
+
+/* Layer 5: .content-container — 最终控制文字宽度的层，全屏就不限制了 */
+.focus-mode .VPDoc .content-container {
+  max-width: min(1400px, 92%) !important;
+  margin: 0 auto !important;
+  padding: 0 64px 128px !important;
 }
 
 
@@ -603,6 +786,14 @@ html.ref-panel-open {
   --vp-sidebar-width: 0px;
 }
 
+/* VPDoc.vue 在 min-width:1280px 时给 .container 加了 justify-content:center，
+   这个规则不区分是否有侧边栏，会把收窄后的 .content 重新居中到整个容器
+   宽度内，而不是贴着左边——必须显式改成 flex-start 才能让内容真正贴左，
+   把右边空间完整让给分栏面板。 */
+.ref-panel-open .VPDoc .container {
+  justify-content: flex-start !important;
+}
+
 .ref-panel-open .VPDoc .content {
   max-width: calc(100vw - var(--ref-panel-width)) !important;
   margin: 0 !important;
@@ -619,4 +810,213 @@ html.ref-panel-open {
   .ref-panel-open .VPDoc.has-sidebar .content-container {
     max-width: 100% !important;
   }
+}
+
+/* ===== 左侧栏内部的收起按钮（DOM 注入，非 scoped） ===== */
+/* 旧的注入式收起按钮已废弃，收起功能通过拖拽手柄实现 */
+
+/* ===== 侧边栏拖拽调宽手柄 ===== */
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 30;
+  transition: background 0.2s;
+}
+
+.sidebar-resize-handle:hover,
+html.sidebar-resizing .sidebar-resize-handle {
+  background: var(--vp-c-brand-1);
+  opacity: 0.4;
+}
+
+/* 拖拽过程中禁止文字选中和 iframe 事件穿透 */
+html.sidebar-resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+html.sidebar-resizing * {
+  cursor: col-resize !important;
+}
+
+/* 拖拽时禁用 sidebar 的过渡动画，避免拖拽卡顿 */
+html.sidebar-resizing .VPSidebar {
+  transition: none !important;
+}
+
+/* ===== 侧边栏文字不截断：允许换行并缩小字号 =====
+ * VitePress 内部通过 scoped CSS 给 .group 设置了
+ * width: calc(var(--vp-sidebar-width) - 64px)，导致文字被固定宽度容器截断。
+ * 此外 .link 和 .text 可能被 scoped 样式设为 nowrap/ellipsis。
+ * 用高优先级选择器（重复类名）强制覆盖所有相关属性。
+ */
+.VPSidebar .VPSidebarItem .text,
+.VPSidebar .VPSidebarItem .link .text,
+.VPSidebar .VPSidebarItem.level-0 .text,
+.VPSidebar .VPSidebarItem.level-1 .text,
+.VPSidebar .VPSidebarItem.level-2 .text {
+  font-size: 13px !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+}
+
+/* 深层级（系列文章里"部分 → 章节"两层嵌套）左侧的 border+padding 会
+ * 一层层吃掉可用宽度，标题本来就长，缩进越深越容易被挤到只剩几个字。
+ * 缩小每层缩进、并允许内容区域完整撑满剩余宽度。 */
+.VPSidebar .VPSidebarItem.level-2 .items,
+.VPSidebar .VPSidebarItem.level-3 .items,
+.VPSidebar .VPSidebarItem.level-4 .items,
+.VPSidebar .VPSidebarItem.level-5 .items {
+  padding-left: 12px !important;
+}
+
+.VPSidebar .VPSidebarItem .item {
+  min-width: 0;
+}
+
+.VPSidebar .VPSidebarItem .link,
+.VPSidebar .VPSidebarItem .text {
+  min-width: 0;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  display: block !important;
+}
+
+/* ===== 公式尺寸稳定：禁止渲染后再产生位移 =====
+ * 背景：MathJax v3 渲染出的 <svg> 自带精确的 width/height 属性
+ * （单位 ex，相对 font-size 计算），浏览器在解析到这两个属性时就能
+ * 一次性算出公式该占多大的地方，不需要等图片/字体加载完再回头调整。
+ * 之前站内还有一段 JS（useMathAutoFit.ts）会在页面渲染完成之后，
+ * 用 setTimeout 延迟测量公式宽度、再动态改写 mjx-container 的
+ * font-size 来"缩小超宽公式"。这段逻辑的问题是：它在首次渲染完成
+ * 之后才执行、且会在窗口 resize / DOM 变化（切页、面板开合等）时
+ * 反复重新计算并重新赋值 font-size，每次赋值都会触发一次重排，
+ * 表现出来就是公式在页面刚加载或操作页面时"突然变大/变小、上下跳动"。
+ * 这不是浏览器的问题，是我们自己用 JS 在渲染之后又动态改了一次尺寸。
+ * 解决方案：整体去掉这段 JS，公式尺寸完全交给 CSS + SVG 自带的
+ * width/height 静态确定，浏览器首次布局时就能一次性算出最终占位，
+ * 后续不会再被 JS 改写，自然也不会再有位移。
+ * 超宽公式（矩阵、多行对齐公式）改为纯 CSS 的横向滚动兜底
+ * （overflow-x: auto，是 VitePress 默认行为，这里不需要覆盖），
+ * 纵向则显式声明 visible，避免"计算值联动"规则把纵向也变成可滚动
+ * 导致公式被裁剪成需要上下拖动才能看全（矩阵、多行对齐公式最容易
+ * 触发）。
+ */
+mjx-container {
+  overflow: visible !important;
+  /* 用 SVG 自带的 width/height 直接确定占位大小，禁止再被内容撑开
+     或被外部样式动态改写，从源头保证"渲染完成后不再变化尺寸"。 */
+  contain: layout;
+}
+
+/* ===== Mermaid 节点/边文字不再被裁剪（全站生效） =====
+ * 根因：Mermaid 渲染节点、边标签时用 <foreignObject> 包一层 HTML <div>
+ * 来排版文字，再据此计算出一个"框"（矩形节点大小、标签背景大小）。
+ * foreignObject 的默认 overflow 是 hidden——如果 Mermaid 内部对文字宽度/
+ * 换行行数的预估比浏览器实际渲染出来的小（中文、无空格长词、特殊字符如
+ * 圆圈数字①②③最容易触发这个偏差，浏览器的实际字体度量和 Mermaid 内部
+ * 用的预估算法不一致），多出来的那部分文字会被直接砍掉，表现为"图上文字
+ * 显示不全"。这不是某一篇文章写错了，是 Mermaid 对中文排版的通病，全站
+ * 所有 mermaid 图都有这个风险。
+ * 修复：把 foreignObject 及其内部 label 容器的 overflow 都改成 visible，
+ * 这样即使 Mermaid 算出来的框小了，多出来的文字会正常溢出显示而不是被裁
+ * 掉——图可能会因此看起来没那么"整齐"（文字略微超出背景色块），但绝不会
+ * 再丢字。这比逐篇手动拆行更彻底，对已有和以后新写的图都自动生效。
+ */
+.mermaid foreignObject {
+  overflow: visible !important;
+}
+
+.mermaid foreignObject > div {
+  overflow: visible !important;
+}
+
+
+/* ===== 公式详解折叠面板 (Formula Detail Fold) =====
+ * 背景：写作规范要求每个公式后必须有"逐符号拆解 + 数值代入"的详细讲解，
+ * 但这部分内容篇幅长、对已经理解公式的读者是噪音。约定用 VitePress 内置的
+ * `::: details` 容器包裹这部分内容，默认折叠，读者按需展开。
+ * 注意：Step 1（"这个公式在做什么"的一句话直觉）永远不放进折叠区——
+ * 读者不展开也必须能看懂公式大意，折叠的只是"逐符号拆解"和"数值代入"
+ * 这类详细验证内容。这是 details.custom-block 在本站唯一的用途，
+ * 因此可以放心把默认的 VitePress details 样式整体改造成"公式详解"专属外观，
+ * 不用担心和其他用途冲突。
+ */
+.vp-doc details.custom-block.details {
+  border: 1px solid var(--vp-c-brand-soft);
+  border-left: 3px solid var(--vp-c-brand-1);
+  border-radius: 8px;
+  background-color: var(--vp-c-bg-soft);
+  padding: 12px 16px 14px;
+  margin: 16px 0;
+}
+
+.vp-doc details.custom-block.details summary {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--vp-c-brand-1);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+/* 去掉浏览器默认的三角形箭头，换成自己画的、跟随展开状态旋转的箭头，
+   放在文字右侧而不是最左侧，视觉上更像一个"可点击的标签"而不是原生控件 */
+.vp-doc details.custom-block.details summary::-webkit-details-marker {
+  display: none;
+}
+
+.vp-doc details.custom-block.details summary::marker {
+  content: '';
+}
+
+.vp-doc details.custom-block.details summary::after {
+  content: '▸';
+  margin-left: auto;
+  display: inline-block;
+  transition: transform 0.2s ease;
+  color: var(--vp-c-text-3);
+  font-size: 12px;
+}
+
+.vp-doc details.custom-block.details[open] summary::after {
+  transform: rotate(90deg);
+}
+
+.vp-doc details.custom-block.details summary:hover {
+  color: var(--vp-c-brand-2);
+}
+
+.vp-doc details.custom-block.details summary:hover::after {
+  color: var(--vp-c-brand-1);
+}
+
+/* 展开后的内容区和 summary 之间留出清晰的分隔 */
+.vp-doc details.custom-block.details[open] summary {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--vp-c-divider);
+}
+
+.vp-doc details.custom-block.details > *:last-child {
+  margin-bottom: 0;
+}
+
+.dark .vp-doc details.custom-block.details {
+  background-color: var(--vp-c-bg-alt);
 }

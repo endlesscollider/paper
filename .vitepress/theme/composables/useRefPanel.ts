@@ -36,10 +36,27 @@ export interface RefArticlePayload {
   sections: RefSection[]
 }
 
+/**
+ * 每个 section.html 在构建期只存了"原子内容"（不含子标题），详见
+ * .vitepress/refSections.mjs 顶部注释。这里在读取时把目标 section 自己
+ * 及其后面所有 level 严格更深的连续 section 的 html 拼起来，还原出用户
+ * 点击"第 4.2 节"时应该看到的完整内容（包含 4.2.0、4.2.1……等子节）。
+ */
+function collectSectionRange(sections: RefSection[], startIndex: number): string {
+  const startLevel = sections[startIndex].level
+  const htmlParts = [sections[startIndex].html]
+  for (let i = startIndex + 1; i < sections.length; i++) {
+    if (sections[i].level <= startLevel) break
+    htmlParts.push(sections[i].html)
+  }
+  return htmlParts.join('')
+}
+
 const isOpen = ref(false)
 const isLoading = ref(false)
 const loadError = ref<string | null>(null)
 const currentSection = shallowRef<RefSection | null>(null)
+const currentSectionHtml = ref('')
 const currentArticleTitle = ref('')
 const currentArticleUrl = ref('')
 const currentAnchor = ref('')
@@ -92,6 +109,7 @@ export async function openRefPanel(pathname: string, hash: string) {
   isLoading.value = true
   loadError.value = null
   currentSection.value = null
+  currentSectionHtml.value = ''
   currentAnchor.value = anchor
 
   const key = articleKeyFromHref(pathname)
@@ -101,11 +119,12 @@ export async function openRefPanel(pathname: string, hash: string) {
   try {
     const payload = await fetchArticleSections(filename)
     currentArticleTitle.value = payload.articleTitle
-    const section = payload.sections.find((s) => s.id === anchor)
-    if (!section) {
+    const index = payload.sections.findIndex((s) => s.id === anchor)
+    if (index === -1) {
       loadError.value = `没有找到对应小节（锚点：${anchor}），可能文章已更新，请点击下方按钮跳转查看完整内容。`
     } else {
-      currentSection.value = section
+      currentSection.value = payload.sections[index]
+      currentSectionHtml.value = collectSectionRange(payload.sections, index)
     }
   } catch (err: any) {
     loadError.value = err?.message || '加载失败'
@@ -118,6 +137,7 @@ export function closeRefPanel() {
   isOpen.value = false
   applyPanelClass(false)
   currentSection.value = null
+  currentSectionHtml.value = ''
   loadError.value = null
 }
 
@@ -154,6 +174,7 @@ export function useRefPanel() {
     isLoading,
     loadError,
     currentSection,
+    currentSectionHtml,
     currentArticleTitle,
     currentArticleUrl,
     currentAnchor,

@@ -5,7 +5,7 @@ tags: [VLA, 持续学习, Experience Replay, 灾难性遗忘, π₀, GR00T]
 category: 精读
 ---
 
-# Forget Me Not：预训练 VLA 只需 2% Replay 就能几乎不遗忘
+# Forget Me Not：预训练 VLA 只需 2％ Replay 就能几乎不遗忘
 
 > **论文**: *Pretrained Vision-Language-Action Models are Surprisingly Resistant to Forgetting in Continual Learning*<br>
 > **会议**: ICML 2026<br>
@@ -141,7 +141,7 @@ $$
 2. **即使 0.2%（每任务仅 10 条），遗忘也可控**：NBT = -6.8% vs 小模型 0% replay 的 -38.5%
 3. **预训练规模是决定性因素**：π₀ 不用 replay (68.5%) 就已经比小模型用 2% replay (62.8%) 好
 
-### 3.3 数值例子：2% replay 意味着什么
+### 3.3 数值例子：2％ replay 意味着什么
 
 对我们的 LIBERO-10 例子，每个任务有 5000 条示教：
 - **2% = 100 条/任务**

@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { execSync } from 'node:child_process'
 import matter from 'gray-matter'
 
 export interface SeriesMeta {
@@ -16,6 +17,7 @@ export interface ArticleMeta {
   category: string
   star: number
   date: string
+  lastUpdated: number  // unix timestamp for sorting "最新收录"
   series?: SeriesMeta
 }
 
@@ -26,6 +28,23 @@ const SCAN_DIRS = [
   { dir: '工程项目', base: '/工程项目' },
   { dir: '系列', base: '/系列', indexOnly: true }, // 系列目录只取各系列的 index.md
 ]
+
+/** 获取文件的最近更新时间戳（优先 git，fallback 到 fs mtime） */
+function getLastUpdated(filePath: string): number {
+  try {
+    const stdout = execSync(`git log -1 --format=%ct "${filePath}"`, {
+      cwd: path.resolve(__dirname, '../../'),
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim()
+    if (stdout) return parseInt(stdout, 10) * 1000
+  } catch {}
+  // fallback: filesystem mtime
+  try {
+    return fs.statSync(filePath).mtimeMs
+  } catch {}
+  return 0
+}
 
 function scanDir(dir: string, base: string, indexOnly = false): ArticleMeta[] {
   const fullDir = path.resolve(__dirname, '../../', dir)
@@ -57,6 +76,7 @@ function scanDir(dir: string, base: string, indexOnly = false): ArticleMeta[] {
         category: data.category ?? '系列',
         star: data.star ?? 3,
         date: data.date ?? '',
+        lastUpdated: getLastUpdated(indexFile),
         series: seriesMeta,
       } as ArticleMeta
     }).filter(Boolean) as ArticleMeta[]
@@ -83,6 +103,7 @@ function scanDir(dir: string, base: string, indexOnly = false): ArticleMeta[] {
       category: data.category ?? inferCategory(dir),
       star: data.star ?? 3,
       date: data.date ?? '',
+      lastUpdated: getLastUpdated(path.join(fullDir, file)),
       series: seriesMeta,
     } as ArticleMeta
   }).filter(Boolean) as ArticleMeta[]

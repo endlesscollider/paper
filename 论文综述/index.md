@@ -10,6 +10,7 @@
 - [Sim-to-Real 迁移综述](./S04_Sim_to_Real迁移综述) — 域随机化、系统辨识、对抗训练
 - [扩散模型在决策与控制中的应用综述](./S05_扩散模型在决策与控制中的应用综述) — Diffuser/Diffusion Policy/DPPO
 - [持续/终身 VLA 强化学习综述](./S07_持续终身VLA强化学习综述) — 50 任务顺序学习、有限 replay 和灾难性遗忘
+- [量化股票预测模型与 RL 交易综述](./S09_量化股票预测模型与RL交易综述) — 截面选股 + 漂移适配 + RL 控制的完整技术路线
 
 ## 论文精读
 
@@ -59,3 +60,13 @@
 ### 等变神经网络与凝聚态物理机器学习
 
 - [晶格系统的等变神经网络力场](./073_ENN_Lattice_晶格系统等变神经网络力场) — 2026，把离散点群对称性直接嵌入网络架构，用于凝聚态格点模型的力场建模
+
+### 量化股票预测与 RL 交易
+
+- [StockMixer：轻量截面混合选股](./082_StockMixer_轻量截面混合选股) — AAAI 2024，三维 MLP-Mixer 用于截面股票关系建模
+- [MASTER：市场感知截面选股 Transformer](./083_MASTER_市场感知截面选股Transformer) — AAAI 2024，市场引导动态注意力
+- [DoubleAdapt：分布漂移双重适配](./084_DoubleAdapt_分布漂移双重适配) — KDD 2023，元学习驱动的在线适配框架
+- [InvariantStock：不变特征学习选股](./085_InvariantStock_不变特征学习选股) — TMLR 2024，跨环境因果不变特征
+- [HIST / TRA：概念行业关系建模选股](./086_HIST_TRA_概念行业关系建模选股) — ACM MM 2022 / KDD 2021，概念图与时间路由
+- [FinRL：PPO/SAC 用于组合仓位控制](./087_FinRL_PPO_SAC用于组合仓位控制) — FinRL 竞赛框架，RL 做低维仓位控制
+- [MacroHFT：分层市场状态路由 RL 交易](./088_MacroHFT_分层市场状态路由RL交易) — KDD 2024，分层路由 + Memory Bank

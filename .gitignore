@@ -3,3 +3,9 @@ node_modules/
 .vitepress/dist/
 RLinf/
 40cd488f404e2227738508f6c980628a_7859467576116524770_m/
+scripts/.venv/
+scripts/.env
+scripts/daily_report.log
+.rynnworld4d_src/
+.verl-vla_src/
+.psi0_recap_src/

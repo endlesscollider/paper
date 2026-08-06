@@ -18,6 +18,9 @@
 ### RL 后训练
 
 - [RLinf BC 到 RL 的 ACT 后训练架构](./RLinf_BC到RL的ACT后训练架构) — 从 BC 预训练到 PPO 微调的完整架构、Loss 设计与工程实践
+- [GR00T N1.7 四种 RL 方案全景对比](./GR00T_N1d7_四种RL方案全景对比) — PPO / QC / SAC Flow-G / ConRFT 的核心差异、选型与兼容性
+- [GR00T N1.7 Chunk-SAC 四种 Actor 目标详解](./GR00T_N1d7_ChunkSAC四种Actor目标详解) — SAC Flow-G 内部的 awr_flow / direct_q / sac_flow_g / awr 拆解
+- [RECAP 工程实践：训练流程、数据管道与 Loss 实现](./RECAP_训练流程与Loss工程实现) — π0.6\* 的完整迭代流程、价值函数/策略训练伪代码、数据配比与超参数
 
 ### 双臂操作
 

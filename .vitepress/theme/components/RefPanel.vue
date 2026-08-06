@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useData } from 'vitepress'
 import { useRefPanel, allowNextNavigation } from '../composables/useRefPanel'
 
-const { isOpen, isLoading, loadError, currentSection, currentArticleTitle, currentArticleUrl, currentAnchor, closeRefPanel } = useRefPanel()
+const { isOpen, isLoading, loadError, currentSection, currentSectionHtml, currentArticleTitle, currentArticleUrl, currentAnchor, closeRefPanel } = useRefPanel()
 const { site } = useData()
 
 // 拼出"跳转阅读全文"的真实链接：站点 base + 文章路径 + 锚点
@@ -55,7 +55,7 @@ function handleJumpClick() {
         <div class="ref-panel-body">
           <div v-if="isLoading" class="ref-panel-loading">加载中…</div>
           <div v-else-if="loadError" class="ref-panel-error">{{ loadError }}</div>
-          <div v-else-if="currentSection" class="ref-panel-content vp-doc" v-html="currentSection.html" />
+          <div v-else-if="currentSection" class="ref-panel-content vp-doc" v-html="currentSectionHtml" />
         </div>
 
         <footer class="ref-panel-footer">
@@ -81,9 +81,10 @@ function handleJumpClick() {
   top: var(--vp-nav-height, 64px);
   right: 0;
   bottom: 0;
-  width: 42vw;
-  min-width: 380px;
-  max-width: 640px;
+  /* 宽度完全由 --ref-panel-width 决定（定义在 custom.css），不再额外加
+     min/max-width 覆盖它——那样会导致这里的"实际渲染宽度"和 custom.css
+     里用同一个变量算出来的"左侧正文应该收窄多少"不一致，产生重叠或空白。 */
+  width: var(--ref-panel-width);
   background: var(--vp-c-bg);
   border-left: 1px solid var(--vp-c-border);
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.08);

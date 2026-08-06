@@ -144,13 +144,13 @@ GAE 递推需要知道每一步的"下一个状态的价值" `values[step+1]`，
 
 ### 5.2 为什么具身 RL 通常用 always
 
-具身 RL 里"任务完成"不代表"这条轨迹后面没有价值可学"——比如机器人抓取任务，抓到物体后可能还有几十步的仿真在跑（等环境判定 episode 该结束），如果直接把这些步的未来价值设为 0，会人为地压低了成功轨迹后半段的优势估计，让"成功"这件事在训练信号里显得不够有分量。所以具身 RL 场景几乎都用 `always`，配合 `env.train.ignore_terminations: True`（[后面会讲到](#七env-配置auto-reset-与-ignore-terminations)）：不把 termination 当成真正的边界，让数据收集持续到步数上限，训练信号更连续。
+具身 RL 里"任务完成"不代表"这条轨迹后面没有价值可学"——比如机器人抓取任务，抓到物体后可能还有几十步的仿真在跑（等环境判定 episode 该结束），如果直接把这些步的未来价值设为 0，会人为地压低了成功轨迹后半段的优势估计，让"成功"这件事在训练信号里显得不够有分量。所以具身 RL 场景几乎都用 `always`，配合 `env.train.ignore_terminations: True`（[后面会讲到](#七-env-配置-auto_reset-与-ignore_terminations)）：不把 termination 当成真正的边界，让数据收集持续到步数上限，训练信号更连续。
 
 ## 六、Actor 配置：batch size 和梯度累积
 
 ### 6.1 micro_batch_size 与 global_batch_size 的关系
 
-[第 06 章](./06_训练后端_FSDP与Megatron#五微批量训练梯度累积与-before_micro_batch)讲过 FSDP 训练需要把一个大 batch 拆成多个 micro-batch 依次算、梯度本地累积。这里的拆分方式由两个配置项共同决定：
+[第 06 章](./06_训练后端_FSDP与Megatron#五-微批量训练-梯度累积与-before_micro_batch)讲过 FSDP 训练需要把一个大 batch 拆成多个 micro-batch 依次算、梯度本地累积。这里的拆分方式由两个配置项共同决定：
 
 ```yaml
 actor:

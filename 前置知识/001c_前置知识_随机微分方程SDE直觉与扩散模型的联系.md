@@ -419,6 +419,13 @@ $$
 - 漂移 = 0：数据本身不动
 - $\sqrt{\frac{\mathrm{d}\sigma^2(t)}{\mathrm{d}t}}$：噪声强度随时间增大。$\sigma(t)$ 是噪声调度函数（如从 0.01 增到 100），它的导数控制了每个时刻噪声注入的速率
 
+**数值例子**：假设噪声调度选用 $\sigma(t) = \sigma_{\min}\left(\frac{\sigma_{\max}}{\sigma_{\min}}\right)^t$（几何调度，$\sigma_{\min}=0.01, \sigma_{\max}=50$）。在 $t=0.5$ 附近计算扩散系数：
+- $\sigma(0.5) = 0.01\times(5000)^{0.5} \approx 0.01\times70.7=0.707$
+- $\sigma^2(t) = \sigma_{\min}^2\left(\frac{\sigma_{\max}}{\sigma_{\min}}\right)^{2t}$，其导数在 $t=0.5$ 处约为 $\frac{\mathrm{d}\sigma^2}{\mathrm{d}t}\Big|_{t=0.5} \approx 2\ln(5000)\times\sigma^2(0.5) \approx 2\times8.52\times0.5=8.52$
+- 所以扩散系数 $g(0.5)=\sqrt{8.52}\approx2.92$
+
+对比 $t=0$ 附近（$\sigma\approx0.01$），扩散系数几乎为 0；到 $t=1$（$\sigma\approx50$），扩散系数会远大于 2.92。这就是"方差从小到大爆炸式增长"的具体体现——注入的噪声强度随时间指数级放大，而 $\mathbf{x}$ 本身（信号部分）由于没有漂移项拉回零，始终保持原值不变，只是被越来越强的噪声淹没。
+
 **和 VP-SDE 的关键区别**：VP 是"同时缩小信号+加噪声"来保持方差稳定；VE 是"不管信号，只管加噪声"，方差一路暴涨。
 
 特点：只有扩散项没有漂移项，方差不断增大。

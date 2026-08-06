@@ -23,9 +23,23 @@ function stripUnrenderableWidgets(html) {
 }
 
 /**
- * 从渲染后的正文 HTML（不含 frontmatter）中提取所有带 id 的标题及其对应的
- * "小节内容"——标题本身 + 一直到下一个同级或更高级标题之前的所有内容
- * （因此天然包含所有更深层的子标题，比如引用 "4.2 节" 会连带 "4.2.0"、"4.2.1" 等子节）。
+ * 从渲染后的正文 HTML（不含 frontmatter）中提取所有带 id 的标题，切成
+ * "原子小节"——每个标题只包含它自己到**下一个任意级别标题**之前的内容，
+ * 不包含任何子标题的内容（子标题是数组里紧随其后的独立条目）。
+ *
+ * 为什么不像最初版本那样让父节点直接内嵌所有子节点的完整 HTML：
+ * 如果 "4.2 节" 的 html 字段里塞进了 "4.2.0"、"4.2.1"……所有子节的完整内容，
+ * 而这些子节自己又在数组里各存一份，同一段内容（尤其是公式渲染出的一大段
+ * SVG 路径）就会被物理复制 N 次（N = 嵌套深度）。一篇公式密集的文章实测能
+ * 把索引文件从几百 KB 撑到 10MB+，全站构建产物直接翻倍。
+ *
+ * 现在的方案：数组本身已经是按文档顺序排列的扁平列表，每个 section 只存
+ * "原子内容"。读者想看"4.2 节"（连带它的子节）时，由前端按 level 做一次
+ * 区间扫描——从 "4.2" 出发，往后累加所有 level 严格大于它的条目，直到遇到
+ * 下一个 level ≤ 它的条目为止，再拼接这些条目的 html——用一次 O(n) 的字符
+ * 串拼接换掉构建期的 O(n·depth) 物理复制，且不需要多存任何额外索引字段
+ * （level 本身就足够重建区间）。具体拼接逻辑见
+ * .vitepress/theme/composables/useRefPanel.ts 的 collectSectionRange()。
  */
 export function extractSections(bodyHtml) {
   const $ = cheerioLoad(`<div id="__root">${bodyHtml}</div>`, { decodeEntities: false })
@@ -53,16 +67,9 @@ export function extractSections(bodyHtml) {
     // 标题纯文本（去掉 markdown-it-anchor 注入的 "#" permalink 图标）
     const title = $(node).clone().find('a.header-anchor').remove().end().text().trim()
 
-    // 找到下一个"同级或更高级"标题的位置作为本节结束边界
-    let endIdx = children.length
-    for (let j = k + 1; j < headingIdx.length; j++) {
-      const otherNode = children[headingIdx[j]]
-      const otherLevel = HEADING_LEVEL[otherNode.name.toUpperCase()]
-      if (otherLevel <= level) {
-        endIdx = headingIdx[j]
-        break
-      }
-    }
+    // 原子边界：下一个"任意级别"的标题（不再要求同级或更高级），
+    // 保证这里只截取属于本标题自己、还没被任何子标题占用的内容
+    const endIdx = k + 1 < headingIdx.length ? headingIdx[k + 1] : children.length
 
     const sectionHtml = children
       .slice(startIdx, endIdx)

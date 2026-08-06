@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "公式折叠讲解检查",
+  "description": "文章保存时自动运行 scripts/check_formula_fold.mjs 检查公式讲解是否符合\"可见摘要 + details 折叠\"规范，如有问题提醒 agent 修复",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "前置知识/*.md",
+      "论文综述/*.md",
+      "工程实践/*.md",
+      "工程项目/*.md",
+      "系列/**/*.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "刚编辑的这篇文章可能包含公式。请运行 `node scripts/check_formula_fold.mjs &lt;刚编辑的文件路径&gt;` 检查每个独立公式（$$...$$）是否同时满足：(1) 公式后有可见的一句话摘要（**这个公式在做什么**/**一句话**），(2) 公式后有 `::: details 📐 逐符号拆解 + 数值代入（点击展开）` 折叠块承载详细讲解。如果脚本报告了问题，按照 .kiro/steering/writing-rules.md 中\"公式详解的排版规范\"一节的模板，把缺失的可见摘要或折叠块补上，不要留着不管。如果这次编辑没有涉及任何 $$...$$ 公式，直接跳过，不需要执行任何操作。"
+  }
+}
