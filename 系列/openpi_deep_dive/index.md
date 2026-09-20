@@ -67,3 +67,7 @@ OpenPI 是 Physical Intelligence 公司开源的机器人基础模型项目，�
 3. **想了解某个模块**：直接跳到对应章节，每章开头有前情提要
 4. **想做微调**：重点读 Ch5-8（数据）+ Ch15-16（配置与权重）
 5. **想部署推理**：重点读 Ch21-22
+
+## G1 工程扩展
+
+如果希望把 OpenPI 的 π₀.₅ Flow Matching 路径接到 Unitree G1 43 DoF、XR 遥操作、LeRobot 和异步真机控制，可以继续阅读 [π₀.₇-inspired G1 VLA 工程系列](/系列/pi07_flow_matching_deep_dive/)。该系列明确区分官方 OpenPI 能力与非官方 G1 工程扩展。

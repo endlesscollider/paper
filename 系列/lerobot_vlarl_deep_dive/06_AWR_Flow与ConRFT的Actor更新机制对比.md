@@ -118,12 +118,21 @@ $$
 L_{\text{actor}}^{\text{AWR-Flow}} = \mathbb{E}_{(s, a_{\text{data}}) \sim \mathcal{D}_{\text{filtered}}} \left[ w(s, a_{\text{data}}) \cdot L_{\text{FM}}(\theta; s, a_{\text{data}}) \right]
 $$
 
-其中：
-- $L_{\text{FM}}$ 是标准的 Flow-Matching MSE loss（预测速度场 vs 真值速度场）
-- $w(s, a) = \min\left(\exp\left(\frac{Q(s, a_{\text{data}}) - Q(s, a_{\pi}))}{\tau}\right), w_{\max}\right)$ 是 AWR 权重
-- $\mathcal{D}_{\text{filtered}}$ 是经过质量过滤的数据集（只有成功/进展的 episode）
+**这个公式在做什么**：把数据里的专家动作当作监督学习的"标签"，但每个样本的学习力度不是均等的——用 advantage 换算出的权重 $w$ 来决定"这条数据值得让 Flow policy 多用力模仿"，advantage 越高权重越大。
 
-**直觉**：这就是一个"加权的监督学习"。权重大（advantage 高）的数据点对 loss 贡献更大 → Flow policy 更用力地"模仿"这些高质量动作 → 策略分布逐渐朝好动作的方向移动。
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\mathcal{D}_{\text{filtered}}$ | **筛过的数据池** | 只保留"成功或有正进展"episode 的数据，质量差的样本根本不参与这次训练 |
+| $L_{\text{FM}}(\theta; s, a_{\text{data}})$ | **模仿这条数据的代价** | 标准 Flow-Matching MSE loss——网络预测的速度场和"从噪声到这条数据动作"的真值速度场之间的差距 |
+| $w(s, a) = \min\!\left(\exp\!\left(\frac{Q(s,a_{\text{data}})-Q(s,a_\pi)}{\tau}\right), w_{\max}\right)$ | **AWR 权重** | 把 advantage（数据动作比当前策略动作好多少）通过 $\exp(\cdot/\tau)$ 放大成一个正数权重，并设上限 $w_{\max}$ 防止某条数据权重失控 |
+| $\mathbb{E}_{(s,a_{\text{data}})\sim\mathcal{D}_{\text{filtered}}}[\cdot]$ | **batch 平均** | 对采样到的一批筛过的数据取平均，训练时就是 `.mean()` |
+
+**用人话读**："在筛过的高质量数据上做监督学习，但每条数据的学习力度由'这条数据的动作比策略自己产出的动作好多少'决定——越好的数据学得越用力。"
+
+**为什么是这个形式**：直接对所有数据做无差别 SFT，会把策略拉向数据集的平均水平，无法利用 Critic 已经学到的"哪些动作更好"的信息；用 $\exp(\text{advantage}/\tau)$ 做权重（AWR，Advantage-Weighted Regression 的标准形式）能连续地放大好样本的影响，同时 $w_{\max}$ 的截断避免了个别异常高的 advantage 主导整个 batch。
+:::
 
 ---
 
@@ -192,6 +201,22 @@ ConRFT 的"Actor 改进"发生在推理时，本质是一个约束优化问题�
 $$
 a^* = \arg\max_{a} Q(s, a) \quad \text{s.t.} \quad \|a - a_{\text{VLA}}\|_\infty \leq \varepsilon
 $$
+
+**这个公式在做什么**：在冻结 VLA 输出的动作 $a_{\text{VLA}}$ 附近的一个小范围内，直接在动作空间里搜索一个 Q 值更高的动作——完全不碰模型参数，只是"挪一挪最终要执行的那个动作"。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\arg\max_a Q(s,a)$ | **动作空间里的贪心搜索** | 在允许范围内找一个能让 Critic 打分最高的动作 $a^*$ |
+| $a_{\text{VLA}}$ | **搜索的锚点** | 冻结 VLA 直接输出的原始动作，是这次搜索的起点/中心 |
+| $\|a - a_{\text{VLA}}\|_\infty \leq \varepsilon$ | **信赖域约束** | 强制精修后的动作离原始动作的每一维都不超过 $\varepsilon$，防止"改过头" |
+| $a^*$ | **最终执行的动作** | 搜索完成后真正发给机器人执行的动作，可能和 $a_{\text{VLA}}$ 有细微差别 |
+
+**用人话读**："在 VLA 给出的原始动作周围一个很小的范围内，找一个 Critic 打分更高的动作去执行——VLA 本身完全没变，只是最后一步的输出被微调了。"
+
+**为什么是这个形式**：如果不加约束地对 $a$ 做无限制的梯度上升，很容易走出 VLA 训练时见过的分布，变成一个 Critic 会给虚高分数的"奖励攻击（reward hacking）"动作；加上 $\|a-a_{\text{VLA}}\|_\infty\leq\varepsilon$ 的信赖域，保证精修后的动作仍然落在 VLA 熟悉的、合理的动作附近，只做小幅度的"纠偏"。
+:::
 
 这和训练 Flow policy 的参数完全是两回事——前者是在**动作空间**中搜索，后者是在**参数空间**中更新。
 
@@ -361,6 +386,22 @@ $$
 \mathrm{d}a_t = \Big[\underbrace{v_\theta(t, a_t, s)}_{\text{冻结的 Flow}} + \underbrace{(1-t) \cdot \alpha_\psi(t) \cdot s_t(a_t)}_{\text{Score 方向修正}}\Big]\mathrm{d}t + \underbrace{\sigma_\phi(t)}_{\text{学习的噪声}}\,\mathrm{d}W_t
 $$
 
+**这个公式在做什么**：在冻结的 Flow ODE 基础上，同时加两样东西——一个"指南针"（score drift，主动把采样方向往高概率区拉）和一个"随机抖动"（噪声，负责探索），两者的力度都由 PPO 训练出来的小网络控制，而 Flow 本身 $v_\theta$ 一个参数都不改。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $v_\theta(t,a_t,s)$ | **冻结的原始导航** | 预训练 Flow 网络给出的速度场，决定"不受任何干扰时应该往哪走"，$\theta$ 全程不更新 |
+| $(1-t)\cdot\alpha_\psi(t)\cdot s_t(a_t)$ | **指南针修正** | $s_t(a_t)=\nabla_a\log p_t(a)$ 是分数函数，指向"当前更高概率的方向"；$\alpha_\psi(t)$ 是学出来的一个标量，控制这次修正用多大力度；$(1-t)$ 让这个修正在采样快结束时（$t\to1$）自动减弱 |
+| $\sigma_\phi(t)\,\mathrm{d}W_t$ | **随机抖动** | 学出来的噪声强度 $\sigma_\phi(t)$ 乘上标准维纳过程增量 $\mathrm{d}W_t$，负责给采样轨迹注入随机探索 |
+| $\mathrm{d}a_t$ | **这一步动作的变化量** | 把"导航方向"、"指南针修正"、"随机抖动"三部分加起来，就是这一步 $a_t$ 该怎么变 |
+
+**用人话读**："动作沿着预训练 Flow 指的方向走，同时被一个可学习的'指南针'轻推向高概率区域，还叠加一点可学习强度的随机抖动——Flow 网络本身完全不改，只学这两个体积很小的辅助信号。"
+
+**为什么是这个形式**：单纯加噪声（下面 9.1 节的 ReinFlow）只能靠随机碰撞找到更好的动作，收敛慢；加入 score drift 相当于给随机游走加了一个"往哪个方向找更容易"的先验方向，让 PPO 能更快收敛。$(1-t)$ 的衰减设计是为了让修正力度随着采样临近结束逐渐消退，避免在最后一步引入过大偏差破坏动作的精细结构。
+:::
+
 ### 8.2 与 AWR-Flow / ConRFT 的本质区别
 
 | 维度 | AWR-Flow | ConRFT | **ScoRe-Flow** |
@@ -407,6 +448,21 @@ ScoRe-Flow 的独特之处在于：它**不需要 Critic**（纯 on-policy），
 $$
 \mathrm{d}a_t = \underbrace{v_\theta(t, a_t, s)}_{\text{预训练速度场（可选冻结/微调）}}\,\mathrm{d}t + \underbrace{\sigma_\phi(t, a_t, s)}_{\text{学习的噪声}}\,\mathrm{d}W_t
 $$
+
+**这个公式在做什么**：ScoRe-Flow SDE 的简化版——去掉指南针（score drift），只保留"沿预训练方向走 + 叠加可学习强度的随机抖动"，探索完全靠随机碰撞，没有主动的方向引导。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $v_\theta(t,a_t,s)$ | **预训练导航** | 和 ScoRe-Flow 一样的预训练速度场，可以选择冻结或允许微调 |
+| $\sigma_\phi(t,a_t,s)\,\mathrm{d}W_t$ | **唯一的探索来源** | 学出来的噪声强度乘上随机增量，是整条公式里唯一负责"探索新动作"的部分 |
+| $\mathrm{d}a_t$ | **这一步动作的变化量** | 只由"预训练方向"和"随机抖动"两项加总决定 |
+
+**用人话读**："动作只沿着预训练 Flow 指的方向走，再叠加一点可学习强度的随机抖动去探索——没有任何主动的方向修正，好坏全靠随机碰撞后由 PPO 记住。"
+
+**为什么是这个形式**：这是 ScoRe-Flow 的前身，用来验证"仅靠调整探索噪声的方差、不改变均值方向，PPO 能不能在 Flow 策略上work"——去掉 score drift 项让实现更简单（只需学一个噪声调度网络），但代价是收敛更慢、最终性能更低（详见 9.2 节对比表）。
+:::
 
 对比 ScoRe-Flow 的 SDE，ReinFlow **没有** score drift 项 $\alpha_\psi \cdot s_t$。
 

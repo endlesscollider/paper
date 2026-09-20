@@ -51,18 +51,33 @@ Octo 也体现了同样思想。Octo 是开源通用机器人策略，它把任�
 这种方法的核心改变可以概括为：
 
 $$
-原本：
-  qpos = [joint, ee, gripper, phase_index]
-  proprio_token = Linear(qpos)
-  encoder memory = [latent_token, proprio_token, image_tokens]
-
-改造后：
-  qpos = [joint, ee, gripper]              # 不再含 phase_index
-  condition = {phase, ref_frame, roles, mask, goal, hold, geometry}
-  condition_tokens = ConditionEncoder(condition)
-  proprio_token = ProprioEncoder(qpos)
-  encoder memory = [latent_token, condition_tokens..., proprio_token, image_tokens]
+\begin{aligned}
+\text{原本：}\quad & qpos = [joint, ee, gripper, phase\_index] \\
+& proprio\_token = \text{Linear}(qpos) \\
+& \text{encoder memory} = [latent\_token,\ proprio\_token,\ image\_tokens] \\[4pt]
+\text{改造后：}\quad & qpos = [joint, ee, gripper] \quad \text{（不再含 } phase\_index \text{）} \\
+& condition = \{phase, ref\_frame, roles, mask, goal, hold, geometry\} \\
+& condition\_tokens = \text{ConditionEncoder}(condition) \\
+& proprio\_token = \text{ProprioEncoder}(qpos) \\
+& \text{encoder memory} = [latent\_token,\ condition\_tokens...,\ proprio\_token,\ image\_tokens]
+\end{aligned}
 $$
+
+**这个公式在做什么**：对比改造前后 encoder memory 的构成——把混进 `qpos` 里的 `phase_index` 拆出来，变成独立的 `condition_tokens`，不再和关节角、末端位姿这些连续物理量搅在一起投影。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $qpos = [joint, ee, gripper, phase\_index]$（原本） | **大杂烩输入** | 把离散控制条件（phase）和连续物理状态（关节、位姿）拼在一起，交给同一个线性层 |
+| $proprio\_token = \text{Linear}(qpos)$（原本） | **糊状投影** | 一个线性层把所有信息压成一个 token，phase 的语义在这一步被压扁、失去边界 |
+| $condition\_tokens = \text{ConditionEncoder}(condition)$（改造后） | **独立身份证** | phase、frame、role、mask 等离散/结构化条件各自经过专门的 embedding/MLP，形成自己的 token，不再被连续状态稀释 |
+| $\text{encoder memory} = [\ldots]$（改造后） | **新的记忆序列** | condition_tokens 作为独立前缀 token，和 proprio、image token 并列送入 Transformer，decoder 可以单独 attend 到它们 |
+
+**用人话读**："以前 phase 只是关节角向量里混进去的一个数字，现在把它单独拎出来做成一个专属 token，让模型能'指名道姓'地去看它。"
+
+**为什么是这个形式**：Transformer 的 attention 机制天然适合处理多个 token 之间的关系，只要条件有独立 token 身份，action query 就能在 decoder cross-attention 中直接 attend 到 `phase_token`、`frame_token` 等，而不必从一个混合的 proprio token 里反推哪个维度代表 phase。
+:::
 
 这里最重要的是“条件独立化”。Transformer 的 attention 机制天然适合处理多个 token 之间的关系；只要条件有独立 token，action query 就可以在 decoder cross-attention 中直接 attend 到 `phase_token`、`frame_token`、`role_token`、`mask_token`，而不是从一个混合的 proprio token 中反推哪个维度代表 phase。
 
@@ -467,9 +482,27 @@ attn_to_hold
 方法二可以与 InterACT 结合：
 
 $$
-condition memory → decoder cross-attention → hs
-hs + interact left/right tokens → residual head
+\begin{aligned}
+\text{condition memory} &\xrightarrow{\text{decoder cross-attention}} hs \\
+hs + \text{interact left/right tokens} &\xrightarrow{} \text{residual head}
+\end{aligned}
 $$
+
+**这个公式在做什么**：说明 condition cross-attention 和 InterACT 现有的左右手 residual 机制怎么串联——先让 decoder 输出 `hs` 吸收 condition 信息，再把它和 InterACT 的左右手 token 一起喂给 residual head 做二次修正。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\text{condition memory}$ | **任务条件记忆** | phase、frame、role、mask 等结构化条件编码后的 token 序列 |
+| $\xrightarrow{\text{decoder cross-attention}} hs$ | **条件读取动作** | action query 通过 cross-attention 读取 condition memory，产出携带条件信息的隐状态 $hs$ |
+| $hs + \text{interact left/right tokens}$ | **两路信息拼接** | 把已经吸收 condition 的 $hs$，和 InterACT 原有的左右手交互 token 放在一起 |
+| $\xrightarrow{} \text{residual head}$ | **二次修正** | 用一个 residual head 基于拼接后的信息，对 action 做左右手协调性的补充修正 |
+
+**用人话读**："decoder 先用条件记忆把动作猜个大概，再让 InterACT 的左右手交互模块在这个基础上做一次协调性修正。"
+
+**为什么是这个形式**：InterACT 本身只建模了左右手 query 之间的交互，不知道 phase/frame/role/mask；把 condition cross-attention 放在前面，可以让 residual head 修正时也间接获得条件信息，而不需要重新设计 InterACT 的结构。
+:::
 
 或者更干脆：把 left/right role token 放入 condition memory，让 action query 自己通过 cross-attention 读取，而不是额外 residual。建议先做 VIMA-style condition decoder，再决定是否保留 interact residual。
 
@@ -504,13 +537,31 @@ BC-Z 和 RT-1 都体现了这种思想。BC-Z 研究机器人模仿学习的零�
 迁移到 ACT，我们不需要语言 encoder，而是用 `ConditionEncoder` 产生一个全局条件向量 `cond_global`，然后在 Transformer encoder/decoder 的每一层通过 FiLM 或 AdaLN 改变 hidden state：
 
 $$
-cond_global = MLP([phase, frame, roles, mask, goal, hold, geometry])
-for each transformer block:
-    hidden = SelfAttention(hidden)
-    hidden = AdaLN(hidden, cond_global)
-    hidden = MLP(hidden)
-    hidden = AdaLN(hidden, cond_global)
+\begin{aligned}
+cond\_global &= \text{MLP}([phase, frame, roles, mask, goal, hold, geometry]) \\[4pt]
+\text{for each transformer block:}\quad
+hidden &= \text{SelfAttention}(hidden) \\
+hidden &= \text{AdaLN}(hidden, cond\_global) \\
+hidden &= \text{MLP}(hidden) \\
+hidden &= \text{AdaLN}(hidden, cond\_global)
+\end{aligned}
 $$
+
+**这个公式在做什么**：把所有结构化条件压缩成一个全局向量 `cond_global`，再让它在 Transformer 每一层的归一化环节直接改变特征的缩放和偏移，而不是只作为一个可被注意力选择性读取的 token。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $cond\_global = \text{MLP}([\ldots])$ | **条件摘要向量** | 把 phase、frame、role、mask、goal、hold、geometry 这些结构化条件全部拼起来，压缩成一个全局向量，代表"当前整体处于什么控制模式" |
+| $\text{SelfAttention}(hidden)$ | **常规特征交互** | Transformer block 里原本就有的自注意力计算，不受条件影响 |
+| $\text{AdaLN}(hidden, cond\_global)$ | **条件调制阀门** | 用 `cond_global` 生成缩放（scale）和偏移（shift），直接改变归一化后特征的数值范围，而不是让模型自己决定要不要"看"条件 |
+| 逐层重复 AdaLN | **每层都被打上条件印记** | 不只在输入端加条件，而是让 encoder/decoder 每一层的计算都被条件调制，模式切换更彻底 |
+
+**用人话读**："把所有条件揉成一个全局向量，直接去改每一层特征的缩放和偏移，让模型的计算方式本身随条件切换，而不是让模型自己选择要不要理会条件。"
+
+**为什么是这个形式**：condition token + cross-attention 仍然把条件当作"可读取的信息"，模型是否读取由 attention 学习决定；而 AdaLN 让条件直接参与每层的仿射变换，是更强的硬约束——即使 attention 学得不好，条件依然会强制改变特征分布。
+:::
 
 这和方法一/二的区别是：condition 不再只是一些被 attention 读取的 memory，而是成为每层计算的参数生成器。它更像“系统模式开关”。phase 0、phase 1、phase 2 对应不同的归一化尺度和偏置，模型的特征空间会随条件改变。
 
@@ -647,8 +698,23 @@ cam_features = film(cam_features, cond_global)
 AdaLN 的一个重要优点是，它不需要为每个 phase 建完全独立的模型，但可以让同一个模型在不同 phase 下表现得像不同子策略。可以理解为：
 
 $$
-shared parameters + condition-generated scale/shift = phase/frame/role-conditioned computation
+\text{shared parameters} + \text{condition-generated scale/shift} = \text{phase/frame/role-conditioned computation}
 $$
+
+**这个公式在做什么**：说明 AdaLN 为什么能用一套共享参数模拟出"多个子策略"的效果——共享权重不变，只靠条件生成的缩放/偏移就能让同一个网络在不同 phase/frame/role 下表现出不同的计算行为。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\text{shared parameters}$ | **共享地基** | Transformer 的权重矩阵在所有 phase/frame/role 下完全共用，不额外增加参数量 |
+| $\text{condition-generated scale/shift}$ | **条件专属滤镜** | 由 `cond_global` 实时生成的缩放和偏移，随条件不同而不同 |
+| $=\ \text{phase/frame/role-conditioned computation}$ | **等效的多模式行为** | 两者相加的效果，等价于给每种 phase/frame/role 组合都配了一个"专属版本"的网络，但没有真的复制参数 |
+
+**用人话读**："权重永远是同一套，只是每次根据当前条件套一层不同的缩放滤镜，效果上就像换了个专用子模型。"
+
+**为什么是这个形式**：对小数据任务，真的为每个 phase 训练独立 head 容易过拟合；AdaLN 用极少的额外参数（只是生成 scale/shift 的小 MLP）换来接近"多子策略"的表达能力，是数据效率和模型容量之间的折中方案。
+:::
 
 这比硬拆四个 policy 更数据高效，也比单独 phase token 更强。对于小数据任务，phase-specific head 或 MoE 可能容易过拟合；AdaLN 是中间方案。
 
@@ -995,30 +1061,85 @@ final_action = action_mask * raw_action + (1 - action_mask) * hold_action
 假设 action 中每只手包含 position delta 和 rotation delta。训练时：
 
 $$
-gt_action_world[t:t+K]
-当前 ref_frame pose: T_world_ref[t]
-当前 EE pose: T_world_ee[t]
-将未来目标/动作转换成 ref frame 下的相对表示：
-  T_ref_ee = inverse(T_world_ref) @ T_world_ee
-  delta_ref = transform_delta_world_to_ref(delta_world, T_world_ref)
-模型监督 delta_ref
+\begin{aligned}
+& gt\_action\_world[t:t+K] \\
+& \text{当前 } ref\_frame \text{ pose:}\ T_{world,ref}[t] \\
+& \text{当前 EE pose:}\ T_{world,ee}[t] \\
+& \text{将未来目标/动作转换成 ref frame 下的相对表示：} \\
+& \quad T_{ref,ee} = T_{world,ref}^{-1} \, T_{world,ee} \\
+& \quad delta\_ref = \text{transform\_delta\_world\_to\_ref}(delta\_world,\ T_{world,ref}) \\
+& \text{模型监督 } delta\_ref
+\end{aligned}
 $$
+
+**这个公式在做什么**：训练时不直接监督 world frame 下的动作，而是先把动作转换到参考坐标系（比如抽屉把手坐标系）下的相对表示，再拿这个转换后的量作为监督目标。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $gt\_action\_world[t:t+K]$ | **原始示教标签** | 数据里记录的、world/base frame 下的未来 K 步真实动作 |
+| $T_{world,ref}[t]$ | **参考系定位** | 当前时刻参考坐标系（如 drawer_handle）在 world frame 下的位姿 |
+| $T_{world,ee}[t]$ | **末端定位** | 当前时刻末端执行器在 world frame 下的位姿 |
+| $T_{ref,ee} = T_{world,ref}^{-1} T_{world,ee}$ | **坐标系换算** | 用参考系位姿的逆，把末端位姿从 world frame 转换到 ref frame 下表示 |
+| $delta\_ref = \text{transform\_delta\_world\_to\_ref}(\cdot)$ | **动作换算** | 同样的变换逻辑作用在 delta 动作上，得到 ref frame 下的相对动作 |
+| 模型监督 $delta\_ref$ | **新的监督目标** | 训练时 loss 不再对着 world frame 的动作算，而是对着 ref frame 下的动作算 |
+
+**用人话读**："训练标签不再是'在世界坐标系里怎么动'，而是'相对于抽屉把手这个参考点应该怎么动'——把坐标系转换这件事从神经网络的学习任务里挪出去，用确定性几何计算完成。"
+
+**为什么是这个形式**：如果 action label 仍是 world frame，模型必须同时学会识别当前该用哪个参考系、以及在这个参考系下该怎么动，这对小数据 BC 太难；把坐标系转换做成确定性的几何预处理，模型只需要学"相对动作"本身。
+:::
 
 推理时：
 
 $$
-raw_delta_ref = policy(obs, condition)
-masked_delta_ref = action_mask * raw_delta_ref + (1 - action_mask) * hold_delta_ref
-delta_world = transform_delta_ref_to_world(masked_delta_ref, T_world_ref)
-final_env_action = pack(delta_world, gripper)
+\begin{aligned}
+raw\_delta\_ref &= policy(obs, condition) \\
+masked\_delta\_ref &= action\_mask \cdot raw\_delta\_ref + (1 - action\_mask) \cdot hold\_delta\_ref \\
+delta\_world &= \text{transform\_delta\_ref\_to\_world}(masked\_delta\_ref,\ T_{world,ref}) \\
+final\_env\_action &= \text{pack}(delta\_world, gripper)
+\end{aligned}
 $$
+
+**这个公式在做什么**：推理时把上面训练阶段的转换反过来做——模型在 ref frame 下输出动作，先做 mask 投影，再转换回 world frame 才真正交给环境执行。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $raw\_delta\_ref = policy(obs, condition)$ | **模型的原始猜测** | 策略网络直接输出的、ref frame 下的动作预测，还没经过任何约束 |
+| $action\_mask \cdot raw\_delta\_ref + (1-action\_mask)\cdot hold\_delta\_ref$ | **执行前的投影** | 允许动的维度用模型预测，不允许动的维度强制换成 hold 目标，这一步是硬约束 |
+| $\text{transform\_delta\_ref\_to\_world}(\cdot, T_{world,ref})$ | **坐标系还原** | 把投影后的 ref frame 动作，用当前参考系位姿转换回 world frame，因为环境执行器只认 world/base frame 下的动作 |
+| $\text{pack}(delta\_world, gripper)$ | **打包成环境动作** | 把位置/旋转 delta 和夹爪指令拼成环境能直接执行的动作向量 |
+
+**用人话读**："模型先在'相对参考系'里猜一个动作，系统先把不该动的维度锁死，再把整个动作转换回世界坐标系，最后才发给机器人执行。"
+
+**为什么是这个形式**：mask 投影必须在 ref frame 下做才有意义（比如"只允许沿拉抽屉方向动"这个约束在 world frame 下会随抽屉朝向变化而变化），所以顺序必须是"先在 ref frame 里投影，再转换到 world frame"，不能反过来。
+:::
 
 如果当前 action 是绝对 target pose 而不是 delta，也可以用：
 
 $$
-模型输出 target_pose_in_ref
-执行前 target_pose_world = T_world_ref @ target_pose_in_ref
+\begin{aligned}
+\text{模型输出}\quad & target\_pose\_in\_ref \\
+\text{执行前}\quad & target\_pose\_world = T_{world,ref} \, target\_pose\_in\_ref
+\end{aligned}
 $$
+
+**这个公式在做什么**：如果 action 表示是绝对目标位姿而不是增量，同样的思路成立——模型只需要在参考系下预测目标位姿，执行前用参考系的位姿矩阵左乘转换回 world frame。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $target\_pose\_in\_ref$ | **相对目标** | 模型预测的、相对于参考系（如 drawer frame）的目标末端位姿 |
+| $T_{world,ref}$ | **参考系的世界坐标** | 当前参考系在 world frame 下的位姿矩阵 |
+| $target\_pose\_world = T_{world,ref}\, target\_pose\_in\_ref$ | **还原后的执行目标** | 矩阵乘法把相对目标位姿映射回 world frame，得到可以直接发给控制器的目标位姿 |
+
+**用人话读**："模型说'目标在参考系里长这样'，系统再用参考系自己的世界坐标把这个目标'翻译'成世界坐标系下的真实目标位姿。"
+
+**为什么是这个形式**：绝对位姿和相对 delta 的处理逻辑是一致的——都是先在语义清晰、几何关系稳定的参考系下预测，再用确定性变换换算到执行需要的 world frame，模型不用关心参考系本身在世界里的朝向变化。
+:::
 
 对 drawer phase，ref_frame 可以是 drawer_handle 或 drawer。拉抽屉时，action mask 可以只开放 ref frame 下的 pull axis：
 
@@ -1107,10 +1228,27 @@ class ActionConstraintProjector:
 因此 mask 可以是连续值：
 
 $$
-0.0 = hard hold
-0.2 = allow small correction
-1.0 = fully active
+\begin{aligned}
+0.0 &= \text{hard hold} \\
+0.2 &= \text{allow small correction} \\
+1.0 &= \text{fully active}
+\end{aligned}
 $$
+
+**这个公式在做什么**：把 action mask 从"允许/不允许"的二值开关，扩展成 0 到 1 之间的连续刻度，代表每个维度被允许自主运动的程度。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $0.0 = \text{hard hold}$ | **完全锁死** | 该维度完全不允许模型输出影响执行，始终执行 hold 目标 |
+| $0.2 = \text{allow small correction}$ | **留一道小缝** | 允许模型输出对 hold 目标做小幅修正，比如避障或维持平衡 |
+| $1.0 = \text{fully active}$ | **完全放开** | 该维度完全由模型预测决定，不受 hold 目标约束 |
+
+**用人话读**："mask 不再是非黑即白的开关，而是一个'放权程度'的旋钮，从'完全按规则来'到'完全信任模型'之间可以取任意中间值。"
+
+**为什么是这个形式**：现实中很少有维度是绝对不能动或绝对自由的——比如 phase 0 左手大体上该 hold，但也可能需要小范围避障；连续 mask 比二值 mask 更贴近真实控制需求，也更符合"条件约束"而非"死板规则"的设计初衷。
+:::
 
 执行投影可以写成：
 

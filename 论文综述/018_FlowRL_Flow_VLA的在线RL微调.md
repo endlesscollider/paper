@@ -17,10 +17,9 @@ star: 4
 **标签**: `#VLA` `#强化学习` `#Flow Matching` `#π₀` `#策略梯度` `#似然近似`
 
 **知识链接**：
-- [Flow Matching 与连续归一化流](/前置知识/000g_前置知识_Flow_Matching与连续归一化流) — Flow Matching 的基本原理
-- [策略梯度与 PPO](/前置知识/000a_前置知识_策略梯度与PPO) — 策略梯度定理
+- [Flow Matching 与连续归一化流](/前置知识/000g_前置知识_Flow_Matching与连续归一化流) — 本文所有 ODE / CFM / 精确似然公式的完整推导都在这篇里，读之前建议先看一遍
+- [策略梯度与 PPO](/前置知识/000a_前置知识_策略梯度与PPO) — 策略梯度定理、PPO clip 目标的完整推导
 - [为什么扩散策略难以 RL 微调](/前置知识/000f_前置知识_为什么扩散策略难以RL微调) — 连续生成模型做 RL 的核心困难
-- [对数似然与变分下界](/前置知识/000e_前置知识_对数似然与变分下界) — 似然估计的数学基础
 - [KL 散度与策略约束](/前置知识/000j_前置知识_KL散度与策略约束) — 防止策略崩溃
 - [VLA 模型的 RL 后训练综述](/论文综述/S06_VLA模型的RL后训练综述) — FlowRL 的综述定位
 
@@ -39,152 +38,107 @@ star: 4
 | **π₀** | **Flow Matching** | **最强** |
 | π₀-FAST | 自回归 Token（蒸馏自 π₀） | 高 |
 
-Flow Matching 的优势在于：连续动作空间、高表达力、比扩散更快的推理。
+Flow Matching 的优势在于：连续动作空间、高表达力、比扩散更快的推理（原理见 [Flow Matching 前置知识](/前置知识/000g_前置知识_Flow_Matching与连续归一化流)）。
 
 ### 1.2 核心问题：Flow Matching 没有 log-probability
 
-策略梯度方法（PPO、REINFORCE）的核心公式：
+策略梯度方法（PPO、REINFORCE）都依赖同一个量：动作的对数概率 $\log \pi_\theta(a_t|s_t)$。完整的策略梯度定理和公式详解见[策略梯度与 PPO 前置知识](/前置知识/000a_前置知识_策略梯度与PPO)，这里只说结论——不同 VLA 的动作生成方式，决定了这个量算不算得出来：
 
-$$
-\nabla_\theta J = \mathbb{E}_{\tau \sim \pi_\theta}\left[\hat{A}_t \cdot \nabla_\theta \log \pi_\theta(a_t | s_t)\right]
-$$
+| 动作生成方式 | $\log \pi(a|s)$ 能不能算 |
+|---|---|
+| 自回归 Token（每步 softmax 分类） | ✅ 精确可算 |
+| 扩散策略（去噪链） | ❌ 需要对整条链积分，不可行（见[为什么扩散策略难以 RL 微调](/前置知识/000f_前置知识_为什么扩散策略难以RL微调)） |
+| Flow Matching（确定性 ODE） | ⚠️ 理论上可算，但需要求 ODE 雅可比行列式，代价极高 |
 
-这要求能计算 $\log \pi_\theta(a_t | s_t)$。
-
-**自回归 VLA**：每个 action token 是 softmax 分类 → $\log \pi$ 精确可算 ✓
-
-**扩散策略**：需要对整个去噪链积分 → 不可行（[详见为什么扩散策略难以 RL 微调](/前置知识/000f_前置知识_为什么扩散策略难以RL微调)） ✗
-
-**Flow Matching**：定义了从噪声到动作的确定性 ODE 路径 → 似然需要求解 ODE 的雅可比行列式 → 计算昂贵 ✗
+π₀ 用的正是最后一种。FlowRL 要解决的就是"理论可算但实践算不起"这个矛盾。
 
 ### 1.3 FlowRL 的核心贡献
 
 FlowRL 提出两种近似方法来计算 Flow-based 策略的 log-likelihood：
-1. **Score-based likelihood estimation**：利用 Flow Matching 的 score function 近似 log-prob
-2. **Noise-injection variational bound**：通过加噪声构造变分下界
+1. **Score-based likelihood estimation (SLE)**：利用 Flow Matching 的 score function 近似 log-prob
+2. **Noise-injection variational bound (NIVB)**：通过加噪声构造变分下界
 
-使得 PPO/REINFORCE 可以直接应用于 Flow-based VLA（如 π₀），而**不需要将策略蒸馏为自回归形式**。
+使得 PPO/REINFORCE 可以直接应用于 Flow-based VLA（如 π₀），而**不需要将策略蒸馏为自回归形式**。这两种近似是本文真正的技术贡献，也是下一节的重点。
 
 ---
 
-## 二、方法详解
+## 二、方法详解：怎么把"算不出 log-prob"变成"能跑 PPO"
 
-### 2.1 Flow Matching 回顾
+上一节说清楚了问题：策略梯度（PPO、REINFORCE）的更新方向由 $\nabla_\theta \log \pi_\theta(a|s)$ 决定，Flow Matching 的动作生成是一个确定性 ODE，理论上能算这个 log-prob，但代价是 1120 次前向传播——训练时每一步都要付这个代价，完全跑不起来。
 
-Flow Matching 定义了一个速度场 $v_\theta(x_t, t)$，将噪声 $x_0 \sim \mathcal{N}(0, I)$ 沿 ODE 路径推到动作 $x_1 = a$：
+FlowRL 的两种方法（SLE、NIVB）本质上都是在做同一件事：**放弃"精确算出 log-prob"这个目标，换成"用几次前向传播，估计出一个足够好用的 log-prob 替代值"**，然后把这个替代值原样塞进标准 PPO 的 importance ratio 里（2.5 节）。区别只在于两者对"足够好用"的取舍不同：SLE 更快但没有理论保证，NIVB 稍慢但有严格的下界保证。下面分别看它们具体怎么做到这件事。
 
-$$
-\frac{dx_t}{dt} = v_\theta(x_t, t), \quad t \in [0, 1]
-$$
+### 2.1 为什么精确似然算不起
 
-**训练目标**（条件 Flow Matching）：
+Flow Matching 用一个确定性 ODE 把噪声 $x_0$ 变成动作 $x_1$（ODE 定义、训练目标 CFM、Euler 积分推理，完整推导见 [Flow Matching 前置知识第三节](/前置知识/000g_前置知识_Flow_Matching与连续归一化流#三flow-matching-的数学推导)）。这个 ODE 是可逆变换，根据变量替换公式（change of variables），$x_1$ 的精确 log-likelihood 需要沿整条路径对速度场的 Jacobian 做迹的积分（完整公式和推导见[前置知识第五节](/前置知识/000g_前置知识_Flow_Matching与连续归一化流#五-flow-policy-把-flow-matching-用作机器人策略)）。
 
-$$
-\mathcal{L}_{\text{CFM}}(\theta) = \mathbb{E}_{t, x_0, x_1}\left[\|v_\theta(x_t, t) - (x_1 - x_0)\|^2\right]
-$$
+问题出在这个积分的计算代价：
+- 散度计算需要对每个维度求偏导：$O(d)$ 次前向传播（$d$ = 动作维度 × chunk 大小，π₀ 中 $d=7\times16=112$）
+- 加上时间积分（$N=10$ 个时间点）：总计 $O(d \times N) = 112 \times 10 = 1120$ 次前向传播
+- 对 3B 参数的 π₀ 模型，1120 次前传每次动作决策都要跑一遍，完全不可接受
 
-其中 $x_t = (1-t)x_0 + t x_1$ 是线性插值路径。
+FlowRL 的两个方法（SLE、NIVB）都是为了绕开这 1120 次前传，用远低于这个数量级的计算换一个"够用"的 log-likelihood 估计。
 
-**推理过程**：从 $x_0 \sim \mathcal{N}(0, I)$ 出发，用 Euler 方法积分 ODE：
+### 2.2 方法一：Score-based Likelihood Estimation (SLE)
 
-$$
-x_{t+\Delta t} = x_t + \Delta t \cdot v_\theta(x_t, t)
-$$
+**核心思想**：不算精确积分，而是用 Flow Matching 的速度场直接近似 score function（密度上升最快的方向），再从 score 反推 log-likelihood。
 
-经过 N 步积分后得到动作 $a = x_1$。
+具体做法分两步。第一步是"探测"：在真实动作 $a$ 周围加一个小高斯噪声 $\tilde{a}=a+\sigma\epsilon$，然后问速度场网络"如果你站在这个扰动点附近、快要到达终点时（$t=1-\sigma$），你觉得该往哪走"。因为 Flow Matching 的速度场在接近终点时的取值和 score function 之间存在解析关系（两者共享同一条概率路径），所以"速度场读数和当前位置的差、除以步长 $\sigma$"就近似等于 score——这一步只需要**一次前向传播**，不需要算任何积分。
 
-### 2.2 Flow Matching 的 log-likelihood 精确计算
-
-Flow Matching 定义了一个可逆变换 $x_0 \mapsto x_1$。通过 Change of Variables：
+第二步是把这个 score 近似落地成一个真正能用的 log-likelihood 数值。做法是重复"探测"过程 $M$ 次，每次用不同大小的噪声尺度 $\sigma_m$，把每次探测得到的"差多远"取平方、除以对应的 $\sigma_m^2$ 再取负号，最后对 $M$ 次结果取平均。直觉是：如果 $a$ 真的处在高密度区域，那么无论用多大的噪声去探测，速度场都应该稳定地把扰动点"拉回" $a$ 附近；反之如果探测结果和 $a$ 偏差很大，说明 $a$ 处在低密度区，log-likelihood 就应该更低。多个尺度取平均是为了压低单次探测的随机性（论文用 $M=5$）：
 
 $$
-\log p_\theta(x_1) = \log p_0(x_0) - \int_0^1 \text{tr}\left(\frac{\partial v_\theta(x_t, t)}{\partial x_t}\right) dt
+\log \pi_\theta(a | s) \approx \frac{1}{M}\sum_{m=1}^{M}\left[-\frac{\|a - v_\theta(a + \sigma_m \epsilon_m, 1-\sigma_m)\|^2}{2\sigma_m^2}\right] + C
 $$
 
-**逐项拆解**：
-- $\log p_0(x_0)$：初始高斯噪声的 log-density（容易算）
-- $\text{tr}(\partial v / \partial x)$：速度场的散度（Jacobian 的迹）
-- 积分：需要沿整条 ODE 路径计算散度——**计算量巨大**
+**这个公式在做什么**：用 $M$ 次速度场"探测"的平均误差，直接当作 log-likelihood 的估计值——探测误差越小，说明 $a$ 越处在高密度区，log-likelihood 就越高。
 
-**为什么不可行？**
-- 散度计算需要对每个维度求偏导：$O(d)$ 次前向传播（$d$ = 动作维度 × chunk 大小 = 7×16 = 112）
-- 加上时间积分：总计 $O(d \times N)$ 次前向传播 = 112 × 10 = 1120 次！
-- 对于 7B 参数的 π₀ 模型，这完全不可行
+::: details 📐 公式详解（点击展开）
 
-### 2.3 方法一：Score-based Likelihood Estimation (SLE)
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $v_\theta(a+\sigma_m\epsilon_m,1-\sigma_m)$ | **第 m 次探测的速度场读数** | 在扰动点、快到终点时网络给出的方向 |
+| $-\frac{\|a-v_\theta(\cdot)\|^2}{2\sigma_m^2}$ | **单次探测打分** | 探测结果和真实动作 $a$ 差多远，差得越远打分越低 |
+| $\frac{1}{M}\sum_{m=1}^M(\cdot)$ | **多尺度平均** | 用 $M$ 个不同噪声尺度重复探测，取平均降低单次估计的方差 |
+| $C$ | **无关常数** | 和参数 $\theta$ 无关的归一化项，求梯度时自动消失，不影响策略更新 |
 
-**核心思想**：用 Flow Matching 的速度场近似一个 score function，再用 score 计算 log-likelihood。
+**用人话读**："在真实动作附近用几种不同大小的噪声分别探测一次，看速度场把扰动点拉回来的准不准，平均打分就是近似的对数概率。"
 
-**Step 1：定义辅助的噪声分布**
-
-在动作 $a$ 周围加一个小高斯噪声 $\sigma$：
-
-$$
-\tilde{a} = a + \sigma \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)
-$$
-
-**Step 2：Score 近似**
-
-Flow Matching 的速度场在 $t \to 1$ 时，和 score function 有如下关系：
-
-$$
-\nabla_a \log p_\theta(a) \approx \frac{v_\theta(a, 1-\sigma) - a}{\sigma}
-$$
-
-**逐项拆解**：
-- $v_\theta(a, 1-\sigma)$：在接近终点 $t=1-\sigma$ 时刻的速度场评估
-- 直觉：速度场在终点附近的方向指示了密度增加的方向
-- $\sigma$：小的扰动步长（论文使用 $\sigma = 0.01$）
-
-**Step 3：从 score 到 log-likelihood**
-
-$$
-\log \pi_\theta(a | s) \approx \log p_0(x_0) + \int_0^1 \nabla \cdot v_\theta(x_t, t) dt \approx \frac{1}{M}\sum_{m=1}^{M}\left[-\frac{\|a - v_\theta(a + \sigma_m \epsilon_m, 1-\sigma_m)\|^2}{2\sigma_m^2}\right] + C
-$$
-
-**逐项拆解**：
-- $M$：Monte Carlo 采样次数（论文使用 M=5）
-- $\sigma_m$：第 m 个噪声尺度
-- $\epsilon_m \sim \mathcal{N}(0, I)$：随机噪声样本
-- $C$：与 $\theta$ 无关的常数（在策略梯度中可忽略）
+**为什么要多个噪声尺度而不是一个**：单一尺度的探测方差大、容易被噪声主导；多尺度平均能显著降低估计方差，代价仍只是 $M$ 次前向传播。
+:::
 
 **计算成本**：M=5 次前向传播（vs 精确计算需要 1120 次）→ 加速 200x+
 
-### 2.4 方法二：Noise-Injection Variational Bound (NIVB)
+### 2.3 方法二：Noise-Injection Variational Bound (NIVB)
 
-**核心思想**：构造一个可以精确计算的变分下界。
+**核心思想**：SLE 是"近似"，没有理论保证；NIVB 换一个思路——构造一个数学上严格成立的**下界**，下界本身可以精确计算。PPO 用一个偏低估计的 log-prob 训练是安全的（顶多更新保守），用一个偏高估计的则可能导致策略更新方向错误——这正是 NIVB 相比 SLE 更适合"最终训练"的原因。
 
-**Step 1：定义加噪策略**
+做法的第一步是"模糊化"：Flow Matching 原本的输出是一个确定性的点（给定噪声种子 $x_0$，ODE 积分后只有一个动作有非零概率），这样没法定义一个处处有密度的分布来算似然。NIVB 的处理是在这个确定性输出周围套一层高斯噪声，把尖锐的点模糊成一个有宽度 $\sigma$ 的高斯分布，再对所有可能的噪声种子取平均，得到一个模糊版的策略分布 $\tilde{\pi}_\theta(a|s)$。
 
-给 Flow Matching 输出加噪声，得到一个"模糊"版本的策略：
-
-$$
-\tilde{\pi}_\theta(a | s) = \int \mathcal{N}(a | f_\theta(x_0, s), \sigma^2 I) \cdot p_0(x_0) dx_0
-$$
-
-其中 $f_\theta(x_0, s)$ 是从噪声 $x_0$ 经过 ODE 积分得到的动作。
-
-**Step 2：变分下界**
+第二步是关键：直接算这个模糊分布在真实动作 $a$ 处的密度仍然很贵（要遍历所有噪声种子的积分）。但用 Jensen 不等式可以证明，只需采样 $K$ 个噪声种子、各自跑一遍完整的 ODE 积分，把真实动作 $a$ 到这 $K$ 个生成结果的距离转成高斯密度、取平均再取 log，得到的值必然是真实 log-likelihood 的一个**下界**——不会高估，只会低估：
 
 $$
-\log \pi_\theta(a | s) \geq \log \tilde{\pi}_\theta(a | s) - D_{\text{KL}}(\pi_\theta \| \tilde{\pi}_\theta) \geq \mathbb{E}_{x_0}\left[\log \mathcal{N}(a | f_\theta(x_0, s), \sigma^2 I)\right]
+\log \pi_\theta(a | s) \;\geq\; \log \frac{1}{K}\sum_{k=1}^{K} \mathcal{N}\big(a \mid f_\theta(x_0^{(k)}, s), \sigma^2 I\big)
 $$
 
-**展开**：
+**这个公式在做什么**：给出一个数学上严格成立的下界——采样 $K$ 个噪声种子各自跑一遍 ODE，看真实动作离这些结果有多近，平均起来就是一个可以直接计算、且保证不高估真实似然的估计。
 
-$$
-\log \tilde{\pi}_\theta(a | s) \geq \log \frac{1}{K}\sum_{k=1}^{K} \mathcal{N}(a | f_\theta(x_0^{(k)}, s), \sigma^2 I)
-$$
+::: details 📐 公式详解（点击展开）
 
-**逐项拆解**：
-- $K$：从先验 $p_0$ 采样的噪声数量（论文使用 K=8）
-- $f_\theta(x_0^{(k)}, s)$：第 k 个噪声种子经过 ODE 积分得到的动作
-- $\sigma$：注入噪声的标准差（可调超参数）
-- 直觉：如果多个噪声种子都映射到接近 $a$ 的动作 → $a$ 的似然高
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $f_\theta(x_0^{(k)},s)$ | **第 k 个种子的生成结果** | 从第 $k$ 个采样噪声出发，经过 ODE 积分得到的具体动作 |
+| $\mathcal{N}(a\|f_\theta(x_0^{(k)},s),\sigma^2 I)$ | **这个种子给 $a$ 打的分** | 真实动作 $a$ 落在第 $k$ 个种子生成的高斯分布里的密度值 |
+| $\frac{1}{K}\sum_{k=1}^K(\cdot)$ | **K 个种子的投票平均** | 汇总所有噪声种子的打分，取平均作为最终似然下界 |
 
-**计算成本**：K=8 次 ODE 积分（每次 N=10 步前传）= 80 次前向传播。比精确计算仍然快 14x。
+**用人话读**："采样 K 个噪声种子，各自跑一遍 ODE 生成一个动作，看真实动作离这些生成结果有多近，把这些'近似程度'平均起来就是似然下界。"
 
-### 2.5 两种方法的对比
+**为什么种子越多估计越准**：如果多个独立的噪声种子都映射到接近 $a$ 的位置，说明 $a$ 处在模型高概率区域；$K$ 越大，蒙特卡洛平均的方差越小，下界越紧（论文取 $K=8$ 作为效果与成本的折中）。中间推导用到的 Jensen 不等式链（$\log\tilde\pi_\theta \geq \mathbb{E}_{x_0}[\log\mathcal{N}(\cdot)]$）属于标准的变分下界构造技巧，这里从略。
+:::
+
+**计算成本**：K=8 次 ODE 积分（每次 N=10 步前传）= 80 次前向传播。比精确计算仍然快 14x，比 SLE 贵但估计更稳。
+
+### 2.4 两种方法的对比
 
 | 维度 | SLE（Score-based） | NIVB（变分下界） |
 |------|-------------------|----------------|
@@ -194,30 +148,13 @@ $$
 | 适用场景 | 计算预算紧 | 需要稳定训练 |
 | 论文推荐 | 快速实验 | 最终训练 |
 
-### 2.6 PPO with Approximate Log-Likelihood
+### 2.5 接入 PPO：改的只有一处
 
-有了 log-likelihood 近似后，标准 PPO 直接可用：
+回到最初的问题——策略梯度需要 $\log\pi_\theta(a|s)$，Flow Matching 算不起精确值。现在有了 SLE 或 NIVB 给出的近似值（记作 $\widetilde{\log\pi}$），策略梯度这条路就通了：标准 PPO（完整 clip 目标推导见[策略梯度与 PPO 前置知识](/前置知识/000a_前置知识_策略梯度与PPO)）几乎原样套用，**唯一的改动**是 importance ratio 用近似值而非精确值计算：$r_t = \exp\big(\widetilde{\log \pi}_\theta(a_t|s_t) - \widetilde{\log \pi}_{\theta_{\text{old}}}(a_t|s_t)\big)$。这是标准的"log 空间做减法、再取指数还原成比值"技巧——因为 log-likelihood 本身可能是很大的负数，直接做除法数值不稳定，先减后指数化更稳。
 
-$$
-\mathcal{L}_{\text{PPO}}(\theta) = \mathbb{E}_t\left[\min\left(\frac{\tilde{\pi}_\theta(a_t | s_t)}{\tilde{\pi}_{\theta_{\text{old}}}(a_t | s_t)} \hat{A}_t, \; \text{clip}(\cdot, 1-\epsilon, 1+\epsilon) \hat{A}_t\right)\right]
-$$
-
-**关键修改**：importance ratio 用近似的 log-likelihood 计算：
-
-$$
-\frac{\tilde{\pi}_\theta(a_t | s_t)}{\tilde{\pi}_{\theta_{\text{old}}}(a_t | s_t)} = \exp\left(\widetilde{\log \pi}_\theta(a_t | s_t) - \widetilde{\log \pi}_{\theta_{\text{old}}}(a_t | s_t)\right)
-$$
-
-**逐项拆解**：
-- $\widetilde{\log \pi}_\theta$：用 SLE 或 NIVB 近似得到的 log-likelihood
-- clip 范围 $\epsilon = 0.2$（和标准 PPO 一样）
-- $\hat{A}_t$：GAE 计算的 advantage
-
-**稳定性保证**：
-
-由于 log-likelihood 是近似的，importance ratio 可能有额外噪声。FlowRL 增加了以下稳定性措施：
-1. **Ratio clipping 更保守**：使用 $\epsilon = 0.1$（而非 0.2）
-2. **KL penalty**：加入额外的 KL 惩罚项防止策略偏移过大
+因为近似的 log-likelihood 带噪声，直接套用标准 PPO 超参数会不稳定，FlowRL 额外做了三点补偿：
+1. **Ratio clipping 更保守**：$\epsilon = 0.1$（标准值是 0.2）
+2. **KL penalty**：额外加 KL 惩罚项防止策略偏移过大
 3. **Gradient clipping**：全局梯度裁剪到 norm = 0.5
 
 ---
@@ -227,65 +164,29 @@ $$
 ### 3.1 场景：桌面机械臂 pick-and-place（π₀ 模型）
 
 **任务**："把红色方块放到蓝色容器中"  
-**模型**：π₀（3B 参数，Flow Matching 动作头，action chunk = 16 步）
+**模型**：π₀（3B 参数，Flow Matching 动作头，action chunk = 16 步，动作维度 $d=7\times16=112$）
 
 **SFT 后表现**：成功率 72%。目标：通过 RL 微调提升到 85%+。
 
-### 3.2 log-likelihood 计算的数值例子
+### 3.2 三种计算方式的代价对比
 
-假设 π₀ 在某个状态 $s$ 下输出了动作 $a \in \mathbb{R}^{112}$（7 维 × 16 步 chunk）。
+沿用第二节的结论，把抽象的"计算量"换算成这个具体场景下的前传次数：
 
-**精确计算（不可行）**：
+| 方法 | 每步要做的事 | 前向传播次数 |
+|------|------------|------------|
+| 精确似然 | 112 维每维求偏导 × 10 个时间点积分 | 1120 次 |
+| SLE（$M=5$） | 5 个噪声尺度，各探测一次终点附近速度场 | 5 次 |
+| NIVB（$K=8$） | 8 个噪声种子，各跑一次完整 10 步 ODE 积分 | 80 次 |
 
-$$
-\log p_\theta(a) = \log p_0(x_0) - \int_0^1 \text{tr}\left(\frac{\partial v_\theta}{\partial x_t}\right)dt
-$$
-
-需要 1120 次前传 × 3B 参数 ≈ 不可接受的计算时间
-
-**SLE 近似**：
-
-$$
-\widetilde{\log \pi}_\theta(a | s) \approx \frac{1}{5}\sum_{m=1}^{5}\left[-\frac{\|a - v_\theta(a + 0.01 \cdot \epsilon_m, 0.99)\|^2}{2 \times 0.01^2}\right]
-$$
-
-5 次前传 × 3B 参数 ≈ 几秒（可接受）
-
-**数值**：
-- $\epsilon_1 \sim \mathcal{N}(0, I)$：随机扰动
-- $v_\theta(a + 0.01\epsilon_1, 0.99)$：模型预测的速度 → 假设得到 $v_1$
-- $\|a - v_1\|^2 / (2 \times 0.0001) = 1250.3 / 0.0002 = -6251500$？
-
-**修正**：实际上 $\sigma$ 不能太小，论文使用多尺度：
-
-| $\sigma_m$ | $\|a - v_m\|^2$ | 贡献 |
-|------------|-----------------|------|
-| 0.01 | 0.015 | -75.0 |
-| 0.02 | 0.048 | -60.0 |
-| 0.05 | 0.180 | -36.0 |
-| 0.10 | 0.520 | -26.0 |
-| 0.20 | 1.600 | -20.0 |
-
-$$
-\widetilde{\log \pi}_\theta(a | s) \approx \frac{1}{5}(-75 - 60 - 36 - 26 - 20) + C = -43.4 + C
-$$
+SLE 的 5 次探测对应 5 个噪声尺度 $\sigma_m \in \{0.01, 0.02, 0.05, 0.10, 0.20\}$，每个尺度贡献一个打分，加权平均后作为 $\widetilde{\log\pi}_\theta(a|s)$ 的估计值（本例中平均结果约为 $-43.4$，具体数值不重要，重点是"多尺度平均"这个机制）。
 
 ### 3.3 PPO 更新的一步
 
-假设某个 rollout 中：
-- 旧策略的 log-prob：$\widetilde{\log \pi}_{\text{old}}(a_t | s_t) = -43.4$
-- 新策略的 log-prob：$\widetilde{\log \pi}_{\theta}(a_t | s_t) = -42.1$
-- Advantage：$\hat{A}_t = +0.8$（好动作）
+假设某个 rollout 中，旧策略和新策略对同一个动作给出的近似 log-prob 分别是 $-43.4$ 和 $-42.1$，advantage $\hat{A}_t=+0.8$（好动作）。代入上一节的 importance ratio 公式：$r_t = \exp(-42.1-(-43.4)) = e^{1.3} \approx 3.67$。
 
-Importance ratio：
+新策略比旧策略更喜欢这个动作 3.67 倍——如果不加 clip，这么大的比值乘上正的 advantage 会带来过大的更新。用 $\epsilon=0.1$ 的保守 clip（对应 clip 区间 $[0.9, 1.1]$）：$\min(3.67\times0.8,\ 1.1\times0.8) = \min(2.94,\ 0.88) = 0.88$。
 
-$$
-r_t = \exp(-42.1 - (-43.4)) = \exp(1.3) = 3.67
-$$
-
-Clip 后：$\min(3.67 \times 0.8, \; 1.1 \times 0.8) = \min(2.94, 0.88) = 0.88$
-
-→ 梯度被 clip 限制住了，防止策略跳太远（这就是 PPO 的安全机制）。
+梯度被 clip 死死限制在 0.88，这就是"近似似然噪声大，所以要用更保守的 clip 范围"补偿措施在实际更新中的样子。
 
 ---
 
@@ -347,11 +248,13 @@ flowchart LR
 
 | 指标 | 蒸馏为自回归 → PPO | FlowRL（直接 RL） |
 |------|-------------------|-----------------|
-| 动作精度 | 受限于 token 量化（256 bins） | **连续空间，无量化损失** |
+| 动作精度 | 受限于 token 量化（256 bins，单维平均误差约 0.4%，累积到 112 维约 4.2%） | **连续空间，无量化损失** |
 | 动作平滑性 | 不保证（逐 token 独立） | **ODE 路径天然平滑** |
 | 训练流程 | 两步（蒸馏 + RL） | **一步（直接 RL）** |
 | 蒸馏损失 | ~3-5%（蒸馏不完美） | **0%（无蒸馏）** |
 | 推理速度 | 快（7 token 自回归） | 中（10 步 ODE） |
+
+> 量化误差的估算：把 $[-1,1]$ 切成 256 个格子，每个连续值四舍五入到最近格子中心，平均误差是半个格宽 $\approx 0.0078$；假设 112 个维度的误差独立，总误差按 $\sqrt{112}$ 累积，约为 $0.0078\times\sqrt{112}\approx 0.083$，相对动作范围 [-1,1] 约 4.2%——这是把连续动作硬蒸馏为离散 token 必须付出的代价，也是 FlowRL 坚持直接在连续空间做 RL 的动机之一。
 
 ### 5.3 Log-likelihood 近似质量分析
 
@@ -389,35 +292,14 @@ flowchart LR
 
 ## 六、为什么不直接蒸馏为自回归？
 
-### 6.1 蒸馏的信息损失
-
-π₀ 的 Flow Matching 动作头输出连续的 action chunk（16 步 × 7 维 = 112 维连续向量）。蒸馏为自回归 token 需要：
-1. 将连续值量化为 256 bins → **0.4% 量化误差（每维）**
-2. 假设各维度条件独立 → **丢失维度间相关性**
-3. 动作 chunk 的时间连贯性被打断
-
-**累积误差估计**：
-
-$$
-\text{量化误差} = \frac{\text{bin 宽度}}{2} = \frac{2}{256} \approx 0.0078
-$$
-
-对于 7 维 × 16 步 = 112 维，累积误差：
-
-$$
-\|\epsilon_{\text{quant}}\| \approx 0.0078 \times \sqrt{112} \approx 0.083
-$$
-
-对比动作范围 [-1, 1]，累积误差约 **4.2%**——对精密操作任务是显著的。
-
-### 6.2 Flow Matching 的连续性优势
+π₀ 的 Flow Matching 动作头输出连续的 action chunk（112 维连续向量）。蒸馏为自回归 token 需要把每个维度量化成有限个离散桶，还要假设各维度条件独立——上一节已经算过，这会带来约 4.2% 的累积误差，并丢失维度间的相关性和动作 chunk 的时间连贯性。
 
 Flow Matching 通过 ODE 积分生成动作，天然保证了：
 - 动作各维度之间的相关性（联合分布）
 - 时间步之间的平滑过渡（ODE 路径连续）
 - 高精度连续值输出（浮点精度）
 
-直接在 Flow Matching 上做 RL 保留了这些优势。
+直接在 Flow Matching 上做 RL 保留了这些优势——这正是 FlowRL 要解决 log-likelihood 计算难题、而不是绕道蒸馏的根本原因。
 
 ---
 

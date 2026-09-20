@@ -84,6 +84,10 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
+# 支持中文标题/坐标轴/图例文字（服务器上装了 Noto Sans CJK，本地生成图片时可以放心用中文）
+plt.rcParams['font.sans-serif'] = ['Noto Sans CJK SC', 'WenQuanYi Zen Hei', 'DejaVu Sans']
+plt.rcParams['axes.unicode_minus'] = False
+
 # 让 scipy.stats 可用于 eval
 try:
     import scipy.stats
@@ -183,6 +187,8 @@ def plot_from_config(config: dict) -> str:
         ax.set_xlim(config["xlim"])
     if "ylim" in config:
         ax.set_ylim(config["ylim"])
+    if config.get("yscale"):
+        ax.set_yscale(config["yscale"])
     
     ax.set_xlabel(config.get("xlabel", "x"), fontsize=13)
     ax.set_ylabel(config.get("ylabel", "y"), fontsize=13)

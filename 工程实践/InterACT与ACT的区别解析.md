@@ -16,6 +16,21 @@ $$
 InterACT 动作 = 普通 ACT 主干动作 + interaction residual
 $$
 
+**这个公式在做什么**：说明 InterACT 的最终输出不是重新生成的动作，而是在普通 ACT 已经算出的动作基础上，加一个小分支算出的修正量。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| 普通 ACT 主干动作 | **原有的基础预测** | `DETRVAE` 主体像平常一样从视觉和状态预测出的动作 chunk，和没有 InterACT 时完全一样 |
+| interaction residual | **额外的修正量** | 一个小 Transformer Encoder 处理 `state/left/right token` 后输出的修正向量 |
+| 两者相加 | **组装最终动作** | 基础预测加修正量，就是模型实际执行的动作 |
+
+**用人话读**：InterACT 的动作 = 普通 ACT 本来就会算出的动作，再加上一个专门负责"左右手怎么协调"的修正量。
+
+**为什么是这个形式**：这样 InterACT 天然包含了普通 ACT 作为特例（修正量为 0 时两者完全相同），既能复用已有能力，又能在需要时学习额外的交互修正。
+:::
+
 所以，如果从最直观的角度讲：普通 ACT 更像“看当前画面和机器人状态，直接预测下一段动作”；InterACT 则是在这个预测之外，再给模型一个专门表达“左右手和当前状态怎么协调”的修正通道。它的目的不是替代 ACT，而是补强 ACT 在双手交互、左右手配合、阶段切换和混合数据训练中的表达能力。
 
 ## 目录
@@ -102,6 +117,22 @@ $$
 loss = L1(action, predicted_action) + kl_weight * KL(latent_distribution)
 $$
 
+**这个公式在做什么**：把"预测动作准不准"和"CVAE 潜变量分布是否规整"两个目标合成一个总损失，一次反向传播同时优化动作头和 encoder。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $L1(action, predicted\_action)$ | **动作准确度打分** | 专家动作和模型预测动作的 L1 距离，越小说明预测越准 |
+| $KL(latent\_distribution)$ | **潜变量规整度打分** | 惩罚 encoder 输出的分布偏离标准正态分布太远，防止 latent 塌缩或发散 |
+| $kl\_weight$ | **两个目标的权衡旋钮** | 越大越强迫 latent 分布贴近标准正态，越小越优先保证动作准确 |
+| 两项相加 | **联合优化目标** | 一次反向传播同时更新动作预测能力和 CVAE encoder |
+
+**用人话读**：总损失 = 动作预测的误差 + 权重 × 潜变量分布偏离标准正态的程度，两者一起最小化。
+
+**为什么是这个形式**：这是标准的 CVAE 训练目标（重建项+KL 正则），保证模型既能准确复现专家动作，又能让 latent 空间保持规整，便于推理时用零 latent 采样。
+:::
+
 如果配置了 `action_delta_loss_weight`，还会额外加入相邻动作差分的 L1 loss，用来鼓励预测动作的变化趋势更接近专家数据。动作 loss 还可以按 action group 加权，例如左右手位置、旋转、夹爪分别不同权重。
 
 对初学者来说，可以把普通 ACT 理解成一个“看图和状态，输出未来 50 帧控制命令”的模型。它的难点在于：这 50 帧不是简单复制，而是要从视觉、状态、任务阶段里推断出合理的连续动作。
@@ -159,6 +190,24 @@ residual = ResidualHead([hs + state_token, left_token, right_token])
 final_action = base_action + residual
 $$
 
+**这个公式在做什么**：完整写出 InterACT 前向传播的每一步——先算出普通 ACT 的基础动作，再单独构造三个 token、让它们互相交流，最后算出修正量叠加到基础动作上。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $base\_action = ACTHead(hs)$ | **不变的主干输出** | 和没有 InterACT 时完全一样的普通 ACT 动作预测 |
+| $state\_token = Linear(qpos)$ | **状态的投影** | 把当前机器人状态向量线性映射成一个 token |
+| $left\_token,\ right\_token$ | **两个可学习槽位** | 不来自具体的左右手状态切片，而是训练学出来的独立 embedding |
+| $InteractEncoder([\cdot])$ | **三方对话的小模块** | 一个小 Transformer Encoder，让 state/left/right 三个 token 互相传递信息、更新彼此 |
+| $ResidualHead([hs+state\_token, left\_token, right\_token])$ | **修正量生成器** | 把主干的 query hidden state 和更新后的三个 token 拼在一起，输出一个 residual 向量 |
+| $final\_action = base\_action + residual$ | **最终执行的动作** | 主干预测加修正量，就是模型实际输出的动作 |
+
+**用人话读**：先按普通 ACT 算出基础动作，再单独用一个小模块处理"状态、左手、右手"三个 token 让它们互相沟通，算出一个修正量，最后把修正量加到基础动作上。
+
+**为什么是这个形式**：把交互建模拆成一个独立、轻量的小分支，而不是重新设计整个主干，既保留了 ACT 已学到的能力，又给"左右手怎么协调"这件事一个专门的表达空间。
+:::
+
 这就是当前仓库中 InterACT 和普通 ACT 的核心差别。
 
 注意这里的 `left_token` 和 `right_token` 是可学习参数，不是直接从左手状态切片得到的 token。`state_token` 来自完整 qpos。也就是说，当前实现并没有显式地把 qpos 的左手维度切出来喂给 left token、把右手维度切出来喂给 right token。它是用两个可学习 token 加一个状态 token，让小 Transformer 自己学习“左/右/状态”的交互表示。
@@ -166,8 +215,23 @@ $$
 还有一个重要细节：`interact_residual_head` 的最后一层被初始化为 0。源码里有 `_zero_last_linear(self.interact_residual_head)`。这意味着模型刚创建出来时，interaction residual 输出接近 0，因此：
 
 $$
-final_action ≈ base_action
+\text{final\_action} \approx \text{base\_action}
 $$
+
+**这个公式在做什么**：说明因为 residual head 最后一层被初始化为 0，模型刚创建出来时的实际输出几乎等于普通 ACT 的输出，没有交互修正。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\text{final\_action}$ | **实际执行的动作** | `base_action + residual` 计算出的最终结果 |
+| $\text{base\_action}$ | **普通 ACT 的预测** | 主干本身给出的动作，不受 residual head 初始化影响 |
+| $\approx$ | **近似相等** | residual 因为最后一层置零而接近 0，所以两者几乎没有差别 |
+
+**用人话读**：因为修正量刚开始几乎是 0，所以模型刚创建出来的动作和普通 ACT 几乎一样。
+
+**为什么是这个形式**：这是为了让从普通 ACT checkpoint 恢复训练更稳定——如果 residual 一开始随机输出很大的值，会直接破坏已经学好的主干行为。
+:::
 
 这对于从普通 ACT checkpoint 继续训练特别重要。因为普通 ACT checkpoint 没有 `model.interact_*` 参数，如果直接换成 InterACT，新增参数会随机初始化。若 residual head 一开始随机输出很大动作，模型行为会被破坏。现在 residual 最后一层置零，新增分支初始影响很小，主干能力可以保留。
 
@@ -245,6 +309,23 @@ YAML policy.type
             -> DETRVAE(... interact_segment_layers=0 或 >0 ...)
 $$
 
+**这个公式在做什么**：画出从 YAML 配置到最终模型构建的完整调用链路，说明 `act` 和 `interact` 在哪一步之前完全走同一条路，又在哪一步开始分叉。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| `YAML policy.type` | **配置入口** | 用户写在配置文件里的 `act` 或 `interact` |
+| `_build_policy_config()` | **配置解析** | 把 YAML 里的字段整理成传给策略的 `policy_config` 字典 |
+| `make_policy()` | **共同的工厂函数** | 不管是 `act` 还是 `interact`，都在这里被统一构造成同一个 Python 类 |
+| `ACTPolicy` | **两者共享的外壳** | 无论哪种类型，返回的都是这一个类的实例 |
+| `DETRVAE(... interact_segment_layers ...)` | **真正分叉的地方** | 这个参数是 0 还是大于 0，决定内部要不要创建 interaction 分支 |
+
+**用人话读**：配置里写的 act 或 interact，一路经过配置解析和策略工厂，都会变成同一个 `ACTPolicy`，真正的差异只在最后传进 `DETRVAE` 的一个参数上。
+
+**为什么是这个形式**：这样设计让 InterACT 不需要单独的一整套策略类和训练/rollout 代码，只需要在模型内部多加一个可选分支，最大程度复用已有代码。
+:::
+
 普通 ACT：
 
 $$
@@ -253,6 +334,21 @@ interact_encoder = None
 动作 = action_head(hs)
 $$
 
+**这个公式在做什么**：概括普通 ACT 在这条调用链路末端的具体状态——没有交互分支，动作直接由主动作头给出。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $interact\_segment\_layers=0$ | **关闭开关** | 传给 `DETRVAE` 的这个参数为 0，表示不创建交互分支 |
+| $interact\_encoder=None$ | **分支不存在** | 因为开关是 0，`interact_encoder` 等模块干脆不会被创建 |
+| 动作 $=action\_head(hs)$ | **唯一的输出来源** | 动作完全由主动作头从 query hidden state 算出 |
+
+**用人话读**：普通 ACT 的动作就是主动作头直接给出的结果，没有任何额外修正。
+
+**为什么是这个形式**：这是 InterACT 退化到普通 ACT 的边界情况，说明两者在代码层面共享同一套主干逻辑。
+:::
+
 InterACT：
 
 $$
@@ -260,6 +356,21 @@ interact_segment_layers > 0
 interact_encoder 存在
 动作 = action_head(hs) + interact_residual_head(...)
 $$
+
+**这个公式在做什么**：概括 InterACT 在这条调用链路末端的具体状态——交互分支被创建出来，动作是主动作头输出加上 residual。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $interact\_segment\_layers>0$ | **打开开关** | 这个参数大于 0，触发 `DETRVAE` 创建交互分支的模块 |
+| $interact\_encoder$ 存在 | **分支被创建** | `interact_encoder`、`interact_residual_head` 等模块被实例化 |
+| 动作 $=action\_head(hs)+interact\_residual\_head(...)$ | **两路输出相加** | 主干输出加上交互分支算出的修正量，得到最终动作 |
+
+**用人话读**：InterACT 的动作是主动作头的结果，再加上交互分支额外算出来的一个修正量。
+
+**为什么是这个形式**：这正是"残差适配器"思路的直接体现——不改动主干，只在旁边加一条可选的修正路径。
+:::
 
 ## 训练配置差异：算法差异和实验差异要分开看
 
@@ -349,6 +460,21 @@ $$
   - rollout 输出目录不同
 $$
 
+**这个公式在做什么**：把这个 InterACT 配置里的改动分成两类——哪些是 InterACT 架构本身必须的，哪些只是这一次实验碰巧加上的设置，避免读者把两者混为一谈。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| 架构差异 | **InterACT 必须的改动** | 换成任何 InterACT 实验都必须有的配置，比如 `policy.type=InterACT`、`interact_segment_layers>0` |
+| 当前实验差异 | **这一次实验碰巧的设置** | 混合数据、具体的数据权重、resume 路径——换一个 InterACT 实验可以完全不同 |
+| 两类分开列 | **避免张冠李戴** | 防止把"这次实验用了混合数据"误当成"InterACT 就是要混合数据训练" |
+
+**用人话读**：这份配置里的改动，一部分是"用 InterACT 就必须有"的架构设置，另一部分只是"这次实验恰好这样做"的实验设置，两者不能混着理解。
+
+**为什么是这个形式**：训练配置往往同时承载"算法结构"和"具体实验超参"，如果不显式区分，读者容易把实验层面的巧合当成架构层面的必然结论。
+:::
+
 这两类不要混在一起。否则以后换一个 InterACT 配置，没有混合数据或没有 resume，读者会误以为它不是 InterACT。
 
 ## 推理和 rollout：InterACT 仍走 ACT 后端
@@ -380,6 +506,21 @@ action_execution = chunk
 chunk_size = 50
 temporal_aggregation = true
 $$
+
+**这个公式在做什么**：列出 rollout 阶段常用的三个配置项，说明模型是按整段 chunk 执行动作，并且启用了时间维度上的加权平滑。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $action\_execution=chunk$ | **执行方式** | 每次拿到模型输出的一整段动作序列去执行，而不是只执行一步 |
+| $chunk\_size=50$ | **每次预测的长度** | 模型一次预测未来 50 步的动作 |
+| $temporal\_aggregation=true$ | **平滑开关** | 打开后，同一时间点被多个 chunk 覆盖的预测会被加权平均，而不是只取一个 |
+
+**用人话读**：rollout 按一整段 50 步的 chunk 来执行动作，并且对不同时间步预测重叠的部分做加权平均，让动作更平滑。
+
+**为什么是这个形式**：一次预测多步比逐步预测更能利用动作的连续性，而 temporal aggregation 进一步消除了"每次重新预测导致的抖动"，两者结合能让闭环执行更稳定。
+:::
 
 temporal aggregation 的直觉是：每一步都可能重新预测一段未来动作，那么同一个未来时间点可能被多个不同 chunk 覆盖。代码会对这些重叠预测做指数加权平均，让动作更平滑。
 
@@ -479,6 +620,21 @@ state_token = Linear(qpos)
 left_token = learned embedding
 right_token = learned embedding
 $$
+
+**这个公式在做什么**：说明当前 `interaction` 分支实际构造 token 的方式——三个 token 分别是"完整 qpos 的线性投影"和两个"和左右手状态无关的可学习 embedding"，并没有用到 `segment_layout` 里声明的左右手数据 key。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $state\_token=Linear(qpos)$ | **状态 token 的实际来源** | 用完整的 qpos（不区分左右手）线性投影得到，没有按 `segment_layout` 切片 |
+| $left\_token=$ learned embedding | **左 token 的实际来源** | 一个和输入无关的可学习参数，不是从左手状态切出来的 |
+| $right\_token=$ learned embedding | **右 token 的实际来源** | 同理，一个独立的可学习参数 |
+
+**用人话读**：三个 token 里，状态 token 用的是完整 qpos，左右 token 只是两个独立学出来的参数，配置里写的左右手数据切分规则实际上没有被用上。
+
+**为什么是这个形式**：这是当前实现的一个简化——用可学习槽位代替显式的状态切片，实现简单但语义较弱，属于留给未来增强的方向。
+:::
 
 没有看到按 `segment_layout` 切分 qpos，也没有按 `segment_layout` 切分 action head。因此当前 InterACT 不是“严格按左右手 segment 分别建模”的版本。它更准确地说是“带 state/left/right learned token residual adapter 的 ACT”。
 
@@ -586,6 +742,21 @@ InterACT 学到的是：
 $$
 f_interact(obs) = f_base(obs) + g_interact(obs)
 $$
+
+**这个公式在做什么**：用函数记号总结 InterACT 相对普通 ACT 的关系——它在原有函数上加了一个初始接近 0 的额外函数，而不是重新定义一个全新的函数。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $f_{base}(obs)$ | **普通 ACT 学到的函数** | 从观测到动作 chunk 的原始映射，结构和参数完全不变 |
+| $g_{interact}(obs)$ | **额外学到的修正函数** | interaction 分支学到的映射，初始时输出接近 0 |
+| $f_{interact}=f_{base}+g_{interact}$ | **InterACT 的整体函数** | 两者相加构成的新函数，包含普通 ACT 作为特例 |
+
+**用人话读**：InterACT 学到的函数 = 普通 ACT 的函数 + 一个额外的、一开始几乎不起作用的修正函数。
+
+**为什么是这个形式**：只要 $g_{interact}=0$，InterACT 就完全退化成普通 ACT，说明它的函数空间天然包含普通 ACT，这也是初始化时训练更稳定的原因。
+:::
 
 其中 `g_interact` 初始接近 0。这样模型空间包含普通 ACT：只要 `g_interact = 0`，InterACT 就退化成普通 ACT。因此从函数空间看，InterACT 至少有能力表示普通 ACT 的行为。
 

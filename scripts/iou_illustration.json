@@ -1,0 +1,23 @@
+{
+  "output": "public/iou_illustration.png",
+  "title": "IoU = Intersection / Union",
+  "xlabel": "",
+  "ylabel": "",
+  "xlim": [0, 10],
+  "ylim": [0, 6],
+  "figsize": [7, 4.2],
+  "grid": false,
+  "legend_loc": "upper right",
+  "curves": [
+    {"expr": "np.where((x>=1)&(x<=5), 4.5, np.nan)", "x_range": [1, 5, 200], "label": "A: ground-truth region", "color": "#2196F3", "linewidth": 2.5},
+    {"expr": "np.where((x>=1)&(x<=5), 1.5, np.nan)", "x_range": [1, 5, 200], "color": "#2196F3", "linewidth": 2.5},
+    {"expr": "np.where((x>=3.5)&(x<=7.5), 5.0, np.nan)", "x_range": [3.5, 7.5, 200], "label": "B: predicted region", "color": "#F44336", "linewidth": 2.5},
+    {"expr": "np.where((x>=3.5)&(x<=7.5), 2.0, np.nan)", "x_range": [3.5, 7.5, 200], "color": "#F44336", "linewidth": 2.5}
+  ],
+  "annotations": [
+    {"x": 2.0, "y": 2.9, "text": "A only", "color": "#1565C0", "fontsize": 11},
+    {"x": 6.2, "y": 3.4, "text": "B only", "color": "#c62828", "fontsize": 11},
+    {"x": 3.7, "y": 3.0, "text": "A ∩ B\n(overlap)", "color": "#4A148C", "fontsize": 10, "fontweight": "bold"},
+    {"x": 0.2, "y": 5.5, "text": "IoU = (A ∩ B) / (A ∪ B) : how much two regions overlap, 0=disjoint, 1=identical", "color": "#37474F", "fontsize": 9}
+  ]
+}

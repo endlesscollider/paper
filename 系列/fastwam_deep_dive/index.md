@@ -91,6 +91,6 @@ Fast-WAM 基于 Mixture-of-Transformers (MoT) 架构，在 Wan2.2 视频生成�
 
 - 标题：Fast-WAM: Do World Action Models Need Test-time Future Imagination?
 - 作者：Tianyuan Yuan, Zibin Dong, Yicheng Liu, Hang Zhao
-- 链接：[arXiv 2603.16666](https://arxiv.org/abs/2603.16666)
+- 链接：[arXiv:2603.16666](https://arxiv.org/abs/2603.16666)
 - 代码：[GitHub](https://github.com/yuantianyuan01/FastWAM)
 - 模型：[HuggingFace](https://huggingface.co/yuanty/fastwam)

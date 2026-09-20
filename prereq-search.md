@@ -4,15 +4,18 @@ title: 前置知识搜索
 ---
 
 <script setup>
-import PrereqSearch from './.vitepress/theme/components/PrereqSearch.vue'
+import { withBase } from 'vitepress'
 </script>
 
 <div class="prereq-page">
   <div class="prereq-page-header">
     <h1 class="prereq-page-title">🧠 前置知识搜索</h1>
-    <p class="prereq-page-desc">按标签筛选或关键词搜索，快速定位你需要的基础概念</p>
+    <p class="prereq-page-desc">
+      这个页面已合并进全站统一的
+      <a :href="withBase('/tags?category=前置知识')">🧭 找文章</a>
+      入口，可以在那里按主题/标签筛选前置知识文章。
+    </p>
   </div>
-  <PrereqSearch />
 </div>
 
 <style>

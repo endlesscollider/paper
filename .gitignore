@@ -9,3 +9,16 @@ scripts/daily_report.log
 .rynnworld4d_src/
 .verl-vla_src/
 .psi0_recap_src/
+.newton_src/
+.prm_as_a_judge_src/
+.openpi_src/
+.pi07_src/
+
+# 大型外部缓存与临时产物（不纳入版本控制）
+.external/
+.tmp_plots/
+.tmp_plot_configs/
+test-results/
+.agents/
+tests/
+scripts/_tmp_*.json

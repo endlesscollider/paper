@@ -15,6 +15,9 @@ star: 4
 - [Cross-Attention 与交替注意力机制](/前置知识/001e_前置知识_Cross_Attention与交替注意力机制) — 跨模块复用 KV-Cache 的场景本质是一种 Cross-Attention
 - [Causal Attention 因果注意力掩码](/前置知识/001g_前置知识_Causal_Attention因果注意力掩码) — 自回归生成的基础机制
 - [分组查询注意力 GQA](/前置知识/002l_前置知识_分组查询注意力GQA) — GQA 正是为了压缩 KV-Cache 的显存占用
+- [MQA：多查询注意力](/前置知识/005a_前置知识_MQA_多查询注意力) — 把 KV-Cache 压缩到极限的方案，及其性能代价
+- [MLA：多头潜在注意力](/前置知识/005b_前置知识_MLA_多头潜在注意力) — 联合压缩 KV 而不砍头数的下一代方案
+- [Attention 变体全景综述](/论文综述/S23_Attention变体全景综述) — MHA→MQA→GQA→MLA 完整技术图谱
 - [DiT：Diffusion Transformer 架构](/前置知识/002x_前置知识_DiT_Diffusion_Transformer架构) — DiT 动作头复用 VLM KV-Cache 的典型场景
 
 ---

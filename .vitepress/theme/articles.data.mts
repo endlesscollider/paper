@@ -21,11 +21,13 @@ export interface ArticleMeta {
   series?: SeriesMeta
 }
 
-// 只扫描论文和工程相关目录，前置知识和教程不混入
+// 扫描全部内容目录，让 /tags 全局搜索和各目录首页都能拿到完整数据
 const SCAN_DIRS = [
   { dir: '论文综述', base: '/论文综述' },
   { dir: '工程实践', base: '/工程实践' },
   { dir: '工程项目', base: '/工程项目' },
+  { dir: '前置知识', base: '/前置知识' },
+  { dir: '硬件基础', base: '/硬件基础' },
   { dir: '系列', base: '/系列', indexOnly: true }, // 系列目录只取各系列的 index.md
 ]
 
@@ -112,6 +114,8 @@ function scanDir(dir: string, base: string, indexOnly = false): ArticleMeta[] {
 function inferCategory(dir: string): string {
   if (dir.includes('工程实践')) return '工程实践'
   if (dir.includes('工程项目')) return '工程项目'
+  if (dir.includes('前置知识')) return '前置知识'
+  if (dir.includes('硬件基础')) return '硬件基础'
   return '综述'
 }
 

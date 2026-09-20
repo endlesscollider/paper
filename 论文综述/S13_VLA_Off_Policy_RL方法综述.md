@@ -1,16 +1,16 @@
 ---
 title: VLA Off-Policy RL 方法综述
 order: 13
-tags: [强化学习, VLA, Off-Policy, SAC, Residual RL, Replay Buffer, 机器人]
+tags: [强化学习, VLA, Off-Policy, SAC, Residual RL, Replay Buffer, 外推误差, 机器人]
 category: 综述
 star: 5
 ---
 
-# VLA Off-Policy RL 方法综述：Replay Buffer 驱动的高采样效率训练
+# VLA Off-Policy RL 方法综述：On-Policy 与 Offline 之间的一段谱
 
-> **综述范围**：2024-2026 年所有用 Off-Policy RL（有 Replay Buffer、需少量在线交互）训练/微调 VLA 模型的方法——从 SAC + Residual 到混合数据 Q-Learning，从自回归 VLA 到 Flow Matching VLA
-> **关键词**：Off-Policy、SAC、Residual RL、Replay Buffer、Q 函数、RLPD、采样效率
-> **适用读者**：了解基本 RL 和 VLA 概念，想理解"用最少的在线交互训好 VLA"的技术路线
+> **综述范围**：2024-2026 年所有用 Off-Policy RL（有 Replay Buffer、需少量在线交互）训练/微调 VLA 模型的方法——从 SAC + Residual 到混合数据 Q-Learning
+> **关键词**：Off-Policy、SAC、Residual RL、Replay Buffer、外推误差、分布偏移、RLPD、采样效率
+> **适用读者**：了解基本 RL 和 VLA 概念，想理解"Off-Policy 到底和 On-Policy、Offline RL 有什么本质区别，而不只是记住几个方法名字"
 
 ---
 
@@ -21,15 +21,15 @@ star: 5
 - [SAC (Soft Actor-Critic)](/前置知识/000k_前置知识_SAC_Soft_Actor_Critic) — Off-policy RL 的代表算法
 - [Replay Buffer](/前置知识/000r_前置知识_Replay_Buffer_经验回放) — Off-policy 的核心数据结构
 - [Q 函数与 Value 函数](/前置知识/000o_前置知识_Q函数与Value函数) — Q-V 分离式 Advantage
-- [Flow Matching 与连续归一化流](/前置知识/000g_前置知识_Flow_Matching与连续归一化流) — Flow VLA 的生成框架
-- [强化学习优势函数估计方法综述](./S11_强化学习优势函数估计方法综述) — Q−V Advantage 详解
+- [离线强化学习基础](/前置知识/000s_前置知识_离线强化学习基础) — 外推误差 / 分布偏移问题的完整定义，本文第三章直接建立在这篇之上
+- [CQL 保守 Q 学习](/前置知识/002g_前置知识_CQL保守Q学习) — 纯 Offline RL 处理外推误差的标准做法，本文会反复用它做对照
 
 关联文章：
 
-- [VLA On-Policy RL 方法综述](./S12_VLA_On_Policy_RL方法综述) — PPO/GRPO 路线对比
-- [VLA Offline RL 方法综述](./S14_VLA_Offline_RL方法综述) — 纯离线路线对比
-- [RLPD 精读](./075_RLPD_高效在线RL利用离线数据) — Off-policy 混合数据经典方案
-- [SAC-Flow 精读](./079_SAC_Flow_用SAC直接训练Flow策略) — Flow 策略直接做 SAC
+- [VLA On-Policy RL 方法综述](./S12_VLA_On_Policy_RL方法综述) — 谱系的一端：数据全部来自当前策略，每批用完就丢
+- [VLA Offline RL 方法综述](./S14_VLA_Offline_RL方法综述) — 谱系的另一端：零在线交互，全程只用固定数据集
+- [PLD 精读](./015_PLD_Residual_RL自改进VLA)、[Object-Centric Residual RL 精读](./023_ObjectCentric_ResidualRL_零迁移VLA) — 近在线组的两篇原文
+- [RLPD 精读](./075_RLPD_高效在线RL利用离线数据)、[Sample-Efficient RL 精读](./033_SampleEfficientRL_VLA_高采样效率RL微调)、[ConRFT 精读](./010_ConRFT_一致性策略RL微调VLA) — 混合组的三篇原文
 
 ---
 
@@ -40,58 +40,68 @@ star: 5
 > - SFT 成功率约 60%，失败主要是"差几毫米没夹住"这种精度问题
 > - 有仿真环境（或愿意做少量真机交互，但不超过 500 episodes）
 > - 目标：用最高采样效率把成功率提到 85%+
+>
+> 后面会看到，同样这个场景下，"要不要往 Replay Buffer 里塞离线数据"这一个选择，就决定了你面对的是完全不同的两类风险。
 
 ---
 
-## 一、为什么选 Off-Policy：数据效率是核心
+## 一、Off-Policy 不是一个方法，是一段谱
 
-### 1.1 Off-Policy 的核心优势
+### 1.1 先纠正一个常见误解
 
-Off-Policy 方法（SAC、TD3、Q-learning）的最大特点：**数据可以反复复用**。一条轨迹存入 Replay Buffer 后可以被采样训练数十次，而 On-Policy（PPO）每条数据只能用 1-3 次就丢弃。
+很多人对三者的区分是这样的："On-Policy 是 PPO，Off-Policy 是 SAC，Offline 是不能交互的 SAC"。这个说法只说对了字面意思，没说到点上。**真正决定一个方法面对什么风险、需要什么机制的，不是它叫什么名字，而是它的 Replay Buffer 里，数据是从哪来的、有多"新鲜"。**
 
-| 维度 | On-Policy（PPO） | **Off-Policy（SAC）** |
-|------|-----------------|---------------------|
-| 每条数据使用次数 | 1-3 次 | 20-100 次（高 UTD） |
-| 达到 80% SR 所需交互 | 3000-5000 rollouts | **500-1500 rollouts** |
-| 真实机器人可行性 | 困难 | **可行** |
-| 训练稳定性 | 高 | 中（需要技巧） |
-| Critic 类型 | Value 网络 $V(s)$ | Q 网络 $Q(s,a)$ |
-| 数据来源要求 | 必须来自当前策略 | **任何策略都行** |
+三种设定的本质区别：
 
-### 1.2 Off-Policy 在 VLA 中的独特挑战
+| 维度 | On-Policy | Off-Policy | Offline RL |
+|------|-----------|------------|------------|
+| Buffer 里的数据 | 不存 buffer，用完即丢 | 存 buffer，混合新旧数据 | 只有一份固定数据集，永不更新 |
+| 数据是否来自当前策略 | 是（严格同分布） | 部分是（新数据），部分不是（旧数据/离线数据） | 完全不是（来自某个早已过时或未知的策略） |
+| 能否继续在线交互 | 能（且必须持续交互） | 能（用交互补充新鲜数据） | 不能（这是定义的一部分） |
+| 核心风险 | 无（数据总是新鲜，无过时问题） | **取决于 buffer 里旧数据占比** | 外推误差（策略被 Critic 的虚高估值带偏） |
 
-| 挑战 | 原因 | 解法 |
-|------|------|------|
-| Q 网络要和 VLA 一样大？ | Q(s,a) 输入是高维图像+动作 | 用 VLA 隐层特征初始化 Critic |
-| 分布偏移 | Buffer 中旧数据和新策略差异大 | 对称采样、保守正则化 |
-| 离散动作 token | 自回归 VLA 输出离散 token | 用 Residual（连续修正）绕过 |
-| Flow 策略梯度爆炸 | Q 梯度穿过 K 步 ODE 会爆 | 门控速度网络（SAC-Flow） |
+看最后一行——On-Policy 因为数据永远新鲜，天生没有"过时数据"的问题；Offline RL 因为数据永远不更新，外推误差是无法回避的核心矛盾。**Off-Policy 卡在中间，它面对的风险完全取决于 buffer 里旧数据占的比例。** 这就是为什么"Off-Policy"内部会分裂成两类看起来完全不同的方法。
 
-### 1.3 方法全景
+### 1.2 Off-Policy 内部的分裂：两种完全不同的风险
+
+把方法按"buffer 里离线/陈旧数据占比"排开，会看到清晰的两簇：
 
 ```mermaid
-flowchart TD
-    A["VLA Off-Policy RL"] --> B["Residual RL 系<br/>（冻结 VLA + 小 MLP 修正）"]
-    A --> C["混合数据系<br/>（离线+在线混合训练）"]
-    A --> D["端到端 Q-Learning 系<br/>（直接训 VLA/Flow 策略）"]
-    
-    B --> B1["PLD — SAC 训 Residual → 蒸馏回 VLA"]
-    B --> B2["Object-Centric — 物体位姿 Residual + Sim-to-Real 零迁移"]
-    
-    C --> C1["RLPD — 对称采样 + 高 UTD + Q 集成"]
-    C --> C2["Sample-Efficient — VLA 特征 Critic + 自适应探索"]
-    C --> C3["ConRFT — Offline→Online + 人工干预（真机）"]
-    
-    D --> D1["SAC-Flow — GRU 门控稳定梯度，SAC 端到端训 Flow"]
+flowchart LR
+    A["On-Policy<br/>buffer=0%旧数据<br/>(SimpleVLA-RL/RIPT-VLA)"] --> B["近在线 Off-Policy<br/>buffer≈全新数据<br/>PLD / Object-Centric"]
+    B --> C["混合 Off-Policy<br/>buffer=50%+离线数据<br/>RLPD / Sample-Efficient / ConRFT"]
+    C --> D["Offline RL<br/>buffer=100%固定数据<br/>(CO-RFT/GRAPE)"]
 ```
+
+**左边这簇（近在线）**：PLD、Object-Centric Residual RL。它们的 buffer 里几乎全是"当前联合策略（VLA + Residual）自己刚跑出来的经验"——虽然技术上属于 off-policy（用了几步之前的策略采的数据，严格意义上不是同分布），但**新旧策略之间差距很小**，Critic 见过的动作和当前策略要选的动作高度重合，因此它们完全不用担心外推误差。它们的实际风险是普通的**训练稳定性**问题：一个从零开始学的小网络，如果不加约束，可能在早期探索中输出过大的修正量，把冻结的 VLA 架空。
+
+**右边这簇（混合）**：RLPD、Sample-Efficient RL、ConRFT。它们的 buffer 里明确混入了大量**陈旧甚至完全来自其他策略的数据**（SFT 示教轨迹、历史 rollout）。这时候 Critic 会被要求对"当前策略可能选的、但离线数据里没见过的动作"打分——这正是 [离线强化学习基础](/前置知识/000s_前置知识_离线强化学习基础) 里讲的**外推误差**：Critic 在没有真实数据校准的区域会给出虚高的估值，策略会一头撞进这些虚高区域。ConRFT 的 Phase 1 甚至就是字面意义上的纯 Offline RL（buffer 100% 离线，零在线交互）。
+
+**判断标准**：如果你的方法在没有任何在线交互的情况下删掉全部离线数据也能正常训练——它属于近在线组。如果删掉离线数据训练直接崩溃——它属于混合组，本质上是"Offline RL + 一点在线数据来续命"。
+
+### 1.3 两类风险，两套完全不同的解法
+
+| | 近在线组 | 混合组 |
+|--|---------|--------|
+| 核心风险 | 训练稳定性（新网络早期探索可能输出过大修正量） | 外推误差 / 分布偏移 |
+| 解法思路 | 限制修正幅度，配合迭代蒸馏逐步收紧 | 约束**策略离数据分布多远**（对称采样、Q ensemble、悲观正则） |
+| 最像哪个已知方法 | 一般的探索约束/正则 | CQL / IQL（限制 OOD 动作的 Q 值） |
+| 需要 CQL 式悲观正则吗 | 不需要（数据本身新鲜，没有"陌生动作"问题） | 大多不需要显式 CQL，但要用别的机制（对称采样等）达到同等效果 |
+| 代表方法 | PLD、Object-Centric | RLPD、Sample-Efficient RL、ConRFT |
+
+这就是本文接下来两章的分工：第二章讲近在线组怎么"限制修正幅度防止训练跑偏"，第三章讲混合组怎么"用数据新鲜度代替悲观正则来控制外推误差"。
 
 ---
 
-## 二、Residual RL 系：冻结 VLA + 小网络修正
+## 二、近在线组：SAC 训练一个小型 Residual 网络
 
-### 2.1 核心思想
+### 2.1 为什么这两个方法基本不涉及外推误差
 
-Residual RL 的哲学：**VLA 大方向对了，只差最后的精度微调。用一个极小的 MLP（~100K 参数）学"修正量"，不动 VLA 的 7B 参数。**
+PLD 训练 Residual 用的 SAC，buffer 里全是"当前 VLA+Residual 联合策略"自己刚产生的 transition；Object-Centric Residual RL 在仿真里从零训练，同样是标准在线 SAC。两者共同点：**Critic 学到的 Q 值范围和当前策略要探索的动作范围高度重合**，Critic 不会被要求对"从未见过的陌生动作"打分，因此不存在离线数据里典型的虚高估值问题。
+
+它们的核心哲学是：**VLA 大方向对了，只差最后的精度微调。用一个极小的 MLP（~100K 参数）学"修正量"，不动 VLA 的 7B 参数**——SAC 天然适合这种场景：动作空间小（只是一个修正向量）、状态空间不大（关节角+末端位姿量级），几万步交互就能收敛。
+
+### 2.2 核心机制：clip 限制修正幅度
 
 $$
 a_{\text{final}} = a_{\text{VLA}} + \text{clip}(\pi_{\text{res}}(s),\; -\delta,\; +\delta)
@@ -99,304 +109,170 @@ $$
 
 **这个公式在做什么**：VLA 输出基础动作，Residual 网络输出一个被 clip 限制在 $[-\delta, +\delta]$ 范围内的微小修正量。clip 保证 Residual 不会"喧宾夺主"，VLA 的知识完整保留。
 
-::: details 📐 逐符号拆解 + 数值代入（点击展开）
-**逐符号拆解**：
+::: details 📐 公式详解（点击展开）
 
-| 符号 | 含义 | 典型值 |
-|------|------|--------|
-| $a_{\text{VLA}} \in \mathbb{R}^7$ | VLA 的原始输出动作 | 7 维末端增量 |
-| $\pi_{\text{res}}(s)$ | Residual MLP 的输出 | ~100K 参数的 3 层 MLP |
-| $\delta$ | 修正范围上限 | 0.05（每维最多修正 5%） |
-| $\text{clip}$ | 截断到 $[-\delta, +\delta]$ | 防止 Residual 完全覆盖 VLA 输出 |
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $a_{\text{VLA}}$ | **老司机的基础路线** | VLA 冻结不动，给出一个大方向基本正确的动作 |
+| $\pi_{\text{res}}(s)$ | **微调建议** | 只有 ~100K 参数的小 MLP，输出一个修正向量 |
+| $\text{clip}(\cdot, -\delta, +\delta)$ | **安全绳** | 无论 Residual 想输出多大的值，硬性卡在 $\pm\delta$ 以内 |
+| $a_{\text{VLA}} + \cdots$ | **叠加** | 把修正量加到基础动作上，得到最终执行的动作 |
 
-**数值代入**：VLA 输出"向右移 3cm"$a_{\text{VLA}} = [0.03, 0, 0, \ldots]$，但目标在右偏上 2mm。Residual 学到输出 $[0, 0.002, 0, \ldots]$：
+**用人话读**："VLA 给出一个大致正确的动作，Residual 只能在这个动作附近的一个小范围内做微调，不能推翻 VLA 的决定。"
 
-$$
-a_{\text{final}} = [0.03, 0, 0, \ldots] + [0, 0.002, 0, \ldots] = [0.03, 0.002, 0, \ldots]
-$$
-
-**为什么是这个形式**：加法结构保证 VLA 知识完整保留（冻结不动）。clip 保证 Residual 只做"微调"不做"替代"。只有 100K 参数需要训练，SAC 几分钟就能收敛。
+**为什么是这个形式**：如果不 clip，Residual 在 SAC 训练早期可能因为探索噪声输出一个很大的值，把 VLA 的知识完全覆盖掉。clip 把风险敞口锁死在一个已知范围内，SAC 只需要在这个小范围内做精调，几分钟就能收敛。
 :::
 
-### 2.2 PLD：Probe-Learn-Distill 自改进循环
+**数值感觉**：VLA 输出"向右移 3cm"$a_{\text{VLA}} = [0.03, 0, 0, \ldots]$，目标其实在右偏上 2mm。Residual 学到 $[0, 0.002, 0, \ldots]$（在 $\delta=0.05$ 范围内），叠加后 $a_{\text{final}} = [0.03, 0.002, 0, \ldots]$——只是精调，不是替代。
 
-> **论文**：Self-Improving VLA with Data Generation via Residual RL (arXiv 2511.00091, 2025)
->
-> **核心贡献**：SAC 训小 Residual → 收集成功轨迹 → SFT 蒸馏回 VLA → 迭代
+**PLD（[精读](./015_PLD_Residual_RL自改进VLA)）** 在此基础上加了一层迭代循环：SAC 训好 Residual → 收集"VLA+Residual"成功轨迹 → 蒸馏回 VLA（SFT/LoRA）→ VLA 起点更高 → Residual 需要修正的幅度更小 → 更容易收敛。三轮之后 SFT 65.8% → **89.8%**（超过直接 PPO 的 80.5%），泛化保持 97%。
 
-**三阶段循环**：
+**Object-Centric Residual RL（[精读](./023_ObjectCentric_ResidualRL_零迁移VLA)）** 解决的是同一套机制在 Sim-to-Real 时的一个额外问题：如果 Residual 的输入是图像，仿真训练出的 Residual 部署到真实机器人时会因为视觉 domain gap 完全失灵。解法是把输入换成**物体 6D 位姿（17 维）**——这是物理量，仿真里解析计算、真实里用 FoundationPose 估计，两边同一坐标系同一精度，不存在 gap。结果：VLA alone 55-65% → +Residual **72-85%** 真实机器人，仿真训练仅需 1 小时。
 
-| 阶段 | 做什么 | 用什么算法 | 数据量 |
-|------|--------|-----------|--------|
-| Probe | VLA+Residual 在环境执行 | — | 收集轨迹 |
-| Learn | SAC 训 Residual MLP | SAC (off-policy, 100K buffer) | 50K-100K transitions |
-| Distill | 成功轨迹 SFT 回 VLA | 监督学习（LoRA） | ~1000 条成功轨迹 |
+### 2.3 近在线组小结
 
-**迭代的正反馈循环**：
+| 方法 | 训练对象 | 核心机制 | 关键结果 |
+|------|---------|---------|---------|
+| [PLD](./015_PLD_Residual_RL自改进VLA) | Residual MLP（~100K 参数） | clip 幅度 + 蒸馏迭代 | SFT 65.8% → 89.8% |
+| [Object-Centric](./023_ObjectCentric_ResidualRL_零迁移VLA) | Residual MLP（物体位姿输入） | clip 幅度 + 物体位姿输入 | 55-65% → 72-85% 真机 |
 
-```mermaid
-flowchart LR
-    A["VLA(70%) + Res → 92%"] --> B["蒸馏 → VLA(85%)"]
-    B --> C["VLA(85%) + Res → 96%"]
-    C --> D["蒸馏 → VLA(90%)"]
-    D --> E["VLA(90%) + Res → 98%"]
-```
-
-每轮 VLA 起点更高 → Residual 修正更小 → 组合策略更强 → 蒸馏数据更好 → VLA 进步更大。
-
-**关键数字**：SFT 65.8% → PLD 3 轮 **89.8%**（超过直接 PPO 训 VLA 的 80.5%）。泛化保持 **97%**（VLA backbone 只用 LoRA 微调）。
-
-**为什么用 SAC 而非 PPO 训 Residual**：Residual MLP 只有 100K 参数，状态空间 ~20 维（关节角+末端位姿）——这是 SAC 的最佳适用场景。Off-policy 的 Replay Buffer 让数据效率极高，5 万步交互就够收敛。
-
-### 2.3 Object-Centric Residual RL：零迁移 Sim-to-Real
-
-> **论文**：Object-Centric Residual RL for Zero-Shot Sim-to-Real VLA Enhancement (arXiv 2606.18953, 2025, Microsoft Research)
->
-> **核心贡献**：用物体 6D 位姿作为 Residual 输入，彻底消除 Sim-to-Real 视觉 gap
-
-**解决的核心问题**：Residual RL 在仿真中训好后，部署到真实机器人时效果大打折扣——因为 Residual 如果用图像作为输入，仿真图像和真实图像的视觉差异（domain gap）会导致输出完全错误。
-
-**Object-Centric 的解法**：
-
-| 输入选择 | Sim-to-Real Gap | 精度 |
-|---------|----------------|------|
-| 原始图像 | 巨大（渲染 vs 真实） | 高（但不迁移） |
-| VLA 隐层特征 | 中等 | 中 |
-| **物体 6D 位姿（17 维）** | **几乎为零** | 高且迁移 |
-
-物体位姿是物理量——仿真中用解析计算，真实中用 FoundationPose 估计——两者在同一坐标系、同一精度，不存在 domain gap。
-
-**17 维输入**：目标物体位姿（6D）+ 末端执行器位姿（6D）+ 相对位置（3D）+ 夹爪状态（1D）+ 是否接触（1D）
-
-**实验结果**：VLA alone 55-65% → +Object-Centric Residual **72-85%** 真实机器人。仿真训练仅 **1 小时**。零 Sim-to-Real 适配。
+两者都不需要 CQL 式的"悲观压低 OOD 动作 Q 值"，因为它们的数据本身就是新鲜的——这正是近在线组和下一章的分界线。
 
 ---
 
-## 三、混合数据系：离线经验 + 在线交互
+## 三、混合组：外推误差是绕不开的敌人
 
-### 3.1 RLPD：简单到令人惊讶的强基线
+### 3.1 混合组和纯 Offline RL 共享同一个问题
+
+一旦 buffer 里塞入了不是当前策略产生的旧数据（示教轨迹、历史 rollout），Critic 就要面对 [离线强化学习基础](/前置知识/000s_前置知识_离线强化学习基础) 里说的核心矛盾：**Critic 只能从数据里学到"数据覆盖过的动作"的真实价值，对数据没覆盖的动作，它的输出是外推（extrapolation）而不是学习结果**。如果策略优化器专挑 Critic 打分最高的动作走，很容易正好挑中一个"Critic 因为没见过而瞎猜出高分"的陌生动作——这就是外推误差，纯 Offline RL 的 [CQL](/前置知识/002g_前置知识_CQL保守Q学习) 靠"主动把陌生动作的 Q 值往下压"来解决它。
+
+混合组的三个方法都面对这个问题，但**都没有直接搬 CQL**。原因很简单：它们还有一点在线交互，可以用"让 Critic 持续见到新数据校正自己"来代替"人为压低陌生动作分数"——这比 CQL 更自然，因为陌生动作的真实价值最终会被新数据验证或推翻，不需要靠一个悲观的先验去猜。
+
+### 3.2 三个方法怎么各自实现"用新数据代替悲观正则"
+
+| 方法 | 离线数据在 buffer 中的角色 | 替代 CQL 的机制 | 为什么够用 |
+|------|-------------------------|----------------|-----------|
+| [RLPD](./075_RLPD_高效在线RL利用离线数据) | mini-batch 固定 50% | 对称采样 + [Q ensemble](/前置知识/002y_前置知识_Q网络Ensemble与Subset_Minimization) + LayerNorm | 50% 在线数据持续冲刷 Q 网络对旧数据的偏好，ensemble 取 min 天然抑制虚高 |
+| [Sample-Efficient RL](./033_SampleEfficientRL_VLA_高采样效率RL微调) | 分区动态调整（60%→30%） | VLA 特征 Critic（站在预训练知识上）+ 混合三区 Replay | 早期靠离线数据稳定 Critic，后期逐步让在线数据主导，动态过渡 |
+| [ConRFT](./010_ConRFT_一致性策略RL微调VLA) | Phase 1 = 100%（纯离线） | Phase 1 就是标准 Offline RL（Q-learning）；Phase 2 用人工干预数据（信息密度极高）快速校正 | 45-90 分钟真机交互虽短，但每条干预数据都是"人类明确纠正错误"的高价值信号 |
+
+三者的共同逻辑：**用"数据新鲜度"而不是"数值悲观"来控制外推误差**，区别只在于新鲜数据引入的时机和比例节奏不同。
+
+### 3.3 RLPD：为什么"对称采样"能替代 CQL
 
 > **论文**：Efficient Online RL with Offline Data (ICML 2023, UC Berkeley)
->
-> **核心贡献**：证明标准 SAC + 三个简单工程选择就能打败所有专门设计的 offline-to-online 方法
 
-**三个关键设计**：
+RLPD 的证明很直接：标准 SAC，不加任何 CQL/IQL 式的保守正则化，只做三个工程选择，就打败了所有专门设计的 offline-to-online 方法。
 
-| 设计 | 做法 | 为什么有效 |
-|------|------|-----------|
-| **对称采样** | mini-batch 50% 在线 + 50% 离线 | 防止离线经验被稀释遗忘 |
-| **高 UTD=20** | 每收集 1 步就更新 20 次 | 最大化数据利用率 |
-| **10-Ensemble Q + LayerNorm** | 10 个 Q 网络取 subset-of-2 minimum | 防止高 UTD 下 Q 值发散 |
+| 设计 | 做法 | 对外推误差的作用 |
+|------|------|-----------------|
+| 对称采样 | mini-batch 50% 在线 + 50% 离线 | 离线数据不会被稀释遗忘，同时在线数据持续给 Critic "新鲜校正" |
+| 高 UTD=20 | 每收集 1 步就更新 20 次 | 新数据的校正信号被快速、充分地传播到 Critic |
+| 10-Ensemble Q + LayerNorm | 10 个 Q 网络取 subset-of-2 minimum | 多个 Critic 中只要有一个对陌生动作保持谨慎，取 min 就能压低整体估值 |
 
-**为什么不需要 CQL/IQL 等保守正则化**：对称采样本身就提供了隐式正则化——50% 的离线数据保证 Q 网络不会只看在线数据的偏分布。LayerNorm + Ensemble 进一步稳定训练。这比 CQL 的"人为压低 OOD Q 值"更自然。
+**这比 CQL 更自然的地方**：CQL 是"我不知道这个动作好不好，所以先假设它不好"（悲观假设）；RLPD 是"我不确定的时候多问几个 Critic，取最谨慎的意见，同时尽快用新数据把不确定性消掉"（用信息代替假设）。RLPD 是后续 Q-Chunking、Sample-Efficient RL、Chunked RL 等工作共同的基础。
 
-**在 VLA 中的地位**：RLPD 是后续 Q-Chunking、Sample-Efficient RL、Chunked RL 等工作的共同基础。
-
-### 3.2 Sample-Efficient RL for VLA：500 Rollouts 达到 85%
+### 3.4 Sample-Efficient RL：让离线数据的"角色"随训练动态变化
 
 > **论文**：Sample-Efficient RL Finetuning for VLA (arXiv 2605.25477, 2025)
->
-> **核心贡献**：把 VLA 达到 80%+ 所需交互量从 5000 rollouts 压缩到 500
 
-**三大组件**：
-
-**组件一——VLA-feature Critic**：Critic 的输入不是原始图像，而是冻结 VLA backbone 输出的 4096 维隐层特征。好处：VLA 预训练已经学好了视觉-语言理解，Critic 站在"巨人肩膀上"——10 步就收敛（vs 随机初始化需要 200+ 步）。
-
-**组件二——Adaptive Exploration**：VLA 输出每个 token 时有一个 softmax 置信度。置信度高（VLA "很确定"）的维度少加噪声；置信度低的维度多加噪声。避免在 VLA 已经会做的维度上做无效探索。
-
-**组件三——Hybrid Replay**：Replay Buffer 分三个区域：
+RLPD 的 50/50 是固定比例，Sample-Efficient RL 把这个比例做成了随训练动态调整的三区结构：
 
 | 区域 | 内容 | 初始占比 | 后期占比 |
 |------|------|---------|---------|
-| SFT 数据 | 原始示教轨迹 | 60% | 30% |
+| SFT 数据 | 原始示教轨迹（最"离线"） | 60% | 30% |
 | 成功经验 | 在线交互的成功轨迹 | 10% | 30% |
 | 在线数据 | 所有在线交互（含失败） | 30% | 40% |
 
-随训练推进动态调整比例——早期多用 SFT 数据稳定 Critic，后期更信任在线经验。
+早期 Critic 刚开始训练，让 SFT 数据主导，防止在极少在线数据上过拟合；后期在线数据积累够了，逐步把主导权交给它。这是对"用新数据校正陌生动作估值"这条思路的显式时间调度。
 
-**结果**：**500 rollouts** 达到 85% SR。采样效率比 PPO 提升 **10×**。
+另外两个组件不直接处理外推误差，但服务于同一个目标——让 Critic 尽快摆脱对陌生数据的依赖：**VLA-feature Critic**（用冻结 VLA 的 4096 维隐层特征做 Critic 输入，站在预训练知识上，10 步收敛 vs 随机初始化 200+ 步）、**Adaptive Exploration**（VLA 输出置信度低的维度多探索，高的维度少探索，把有限的在线交互预算花在真正需要新数据校正的地方）。
 
-### 3.3 ConRFT：真实机器人上的 Q-Learning
+**结果**：500 rollouts 达到 85% SR，采样效率比纯 PPO（On-Policy）高 10×。
+
+### 3.5 ConRFT：Phase 1 其实就是一次标准的 Offline RL
 
 > **论文**：ConRFT: Reinforced Fine-tuning VLA via Consistency Policy (arXiv 2502.05450, 2025)
->
-> **核心贡献**：第一个在真实机器人上做 Q-learning 式 VLA RL 的工作（仅 50-100 episodes）
 
-**为什么其他方法在真实机器人上不可行**：
+ConRFT 是混合组里离"纯 Offline RL"最近的一个——它的 **Phase 1 完全零在线交互**，每个任务只用 20~30 条人类示教训练 Q 网络和策略，这一步和 [VLA Offline RL 综述](./S14_VLA_Offline_RL方法综述) 里的方法本质相同。真正让它变成"Off-Policy 混合方法"而不是纯 Offline RL 的，是紧接着的 **Phase 2**：在真实机器人上跑 45~90 分钟（累计 80~120 条策略/人类混合 rollout），人类在危险时刻介入干预。
 
-| 方法 | 真实机器人需交互量 | 可行性 |
-|------|-----------------|--------|
-| PPO (VLA-RL) | ~5000 episodes (~80h) | ❌ |
-| GRPO (RIPT-VLA) | ~2000 episodes (~30h) | ❌ |
-| Residual SAC (PLD) | ~500 episodes (~8h) | 勉强 |
-| **ConRFT** | **50-100 episodes (~30min)** | ✅ |
+为什么真实机器人上只需要这么少的在线数据就能显著改善外推误差？因为人工干预不是普通的在线数据——它明确标注了"这个状态必须这样做"，信息密度远高于策略自己探索出来的普通轨迹。少量高密度校正就能把 Phase 1 里 Critic 因为示教数据覆盖不足而产生的虚高估值纠正过来。
 
-**两阶段设计**：
+ConRFT 的动作头用的是 Consistency Policy（一步生成连续动作），这个选择让 Q-guided 的更新可以直接作用在动作输出上，训练和推理都很快。
 
-- **Phase 1（纯离线）**：用已有示教数据（~50 条）训练 Q 网络 + Consistency Policy action head。Q 网络学"状态-动作对有多好"，Consistency Policy 学"一步生成连续动作"。
-- **Phase 2（少量在线）**：在真实机器人上执行 50-100 episodes，人类在危险时刻可以干预。干预数据的信息密度极高（告诉系统"这个状态必须这样做"）。Q 网络和策略继续更新。
+**结果**（论文 8 个真实任务平均）：SFT 39.4% → Phase 1 纯离线（Cal-ConRFT）≈39.4%（成功率和 SFT 相近，但 Q 函数已经初始化好，为在线阶段铺路）→ Phase 2 少量在线+人工干预（HIL-ConRFT）**96.3%**，全程仅 45~90 分钟真机交互（累计约 80-120 条策略/人类混合 rollout）。完整数字见 [ConRFT 精读 §6.1](./010_ConRFT_一致性策略RL微调VLA#6-1-真实机器人任务与关键数字)。
 
-**为什么用 Consistency Policy**：
+### 3.6 混合组小结
 
-| 动作头 | log-prob 可算? | Q 梯度可穿过? | 生成速度 |
-|--------|--------------|--------------|---------|
-| 自回归 Token | ✅ | ❌（离散采样不可导） | 慢（7 步解码） |
-| Diffusion | ❌（需近似） | ❌（K 步去噪） | 慢 |
-| **Consistency Policy** | ✅（单步） | **✅（一步可导）** | **快（一步）** |
-
-Consistency Policy 一步生成连续动作 → Q 梯度直接穿过（链式法则，无离散/多步问题）→ SAC/TD3 可以直接用。
-
-**结果**：BC 38.8% → 离线阶段 55% → 在线+人工干预 **75%**。仅 50-100 episodes 真实交互（约 25-50 分钟）。
+| 方法 | 离线数据占比走势 | 核心机制 | 关键结果 |
+|------|----------------|---------|---------|
+| [RLPD](./075_RLPD_高效在线RL利用离线数据) | 固定 50% | 对称采样 + Q ensemble | 后续方法的共同基础 |
+| [Sample-Efficient RL](./033_SampleEfficientRL_VLA_高采样效率RL微调) | 60%→30%（动态） | VLA 特征 Critic + 三区 Replay | 500 rollouts → 85% |
+| [ConRFT](./010_ConRFT_一致性策略RL微调VLA) | 100%→逐步引入在线 | Phase 1 纯离线 + Phase 2 人工干预 | 45-90 分钟真机 96.3% |
 
 ---
 
-## 四、端到端 Q-Learning 系：SAC-Flow
+## 四、大对比表：把五个方法放回谱系上看
 
-### 4.1 核心问题：Q 梯度穿过 Flow 策略会爆炸
+### 4.1 全方法横向对比
 
-> **论文**：SAC Flow: Sample-Efficient RL of Flow-Based Policies (arXiv 2509.25756, 2025)
->
-> **核心贡献**：首次实现 SAC 端到端训练多步 Flow Matching 策略
+| 方法 | 所属组 | Buffer 离线数据占比 | 核心风险 | 解法 | 所需交互量 | 典型成功率 |
+|------|-------|------------------|---------|------|-----------|-----------|
+| **[PLD](./015_PLD_Residual_RL自改进VLA)** | 近在线 | ≈0% | 训练稳定性 | clip 幅度 + 蒸馏迭代 | ~100K steps | 89.8% |
+| **[Object-Centric](./023_ObjectCentric_ResidualRL_零迁移VLA)** | 近在线 | ≈0% | 训练稳定性 + Sim-to-Real gap | clip 幅度 + 物体位姿输入 | 1h 仿真 | 72-85% 真机 |
+| **[RLPD](./075_RLPD_高效在线RL利用离线数据)** | 混合 | 固定 50% | 外推误差 | 对称采样 + Q ensemble | 中等 | SOTA 基线 |
+| **[Sample-Efficient](./033_SampleEfficientRL_VLA_高采样效率RL微调)** | 混合 | 动态 60%→30% | 外推误差 | VLA 特征 Critic + 三区 Replay | ~500 rollouts | 85% |
+| **[ConRFT](./010_ConRFT_一致性策略RL微调VLA)** | 混合（贴近 Offline） | Phase1=100% | 外推误差 | 离线预训练 + 人工干预校正 | 45-90 分钟 | 96.3% 真机 |
 
-Flow 策略通过 K 步 ODE 积分生成动作：$A_0 \to A_1 \to \cdots \to A_K$。SAC 的 Actor 更新需要：
-
-$$
-\nabla_\theta Q(s, A_K) \cdot \frac{\partial A_K}{\partial \theta}
-$$
-
-**这个公式在做什么**：SAC 的 Actor 梯度需要把 Q 网络对最终动作 $A_K$ 的梯度，通过链式法则一路反传回策略参数 $\theta$——问题是 $A_K$ 经过了 K 步 ODE 积分，反传路径极长。
-
-::: details 📐 逐符号拆解 + 数值代入（点击展开）
-**逐符号拆解**：
-
-| 符号 | 含义 | 具体是什么 |
-|------|------|-----------|
-| $\nabla_\theta$ | 对策略网络参数求梯度 | 最终用于 Adam 更新的方向 |
-| $Q(s, A_K)$ | Critic 对状态 $s$ 和最终动作 $A_K$ 的打分 | 标量，越高越好 |
-| $A_K$ | K 步 ODE 积分后的最终动作 | 从噪声 $A_0 \sim \mathcal{N}(0,I)$ 经过 K 次速度场更新得到 |
-| $\frac{\partial A_K}{\partial \theta}$ | 最终动作对参数的雅可比 | 涉及 K 步速度网络的连乘 $\prod_{i=1}^{K} \frac{\partial A_{t_i}}{\partial A_{t_{i-1}}}$ |
-
-**数值代入**：假设 $K=8$，每步速度网络的雅可比谱范数 $\approx 1.5$（常见值）：
-
-$$
-\left\|\frac{\partial A_K}{\partial \theta}\right\| \propto 1.5^8 = 25.6
-$$
-
-8 步连乘就放大了 25 倍。如果谱范数 $\approx 2$（稍大一点的网络），$2^8 = 256$——梯度爆炸。实测无门控时梯度范数可达 $10^6$+。
-
-**为什么是这个形式**：这就是标准的 DDPG/SAC Actor 梯度公式 $\nabla_\theta Q(s, \pi_\theta(s))$，只不过 $\pi_\theta(s) = A_K$ 是多步 flow 的输出而非单步 MLP 的输出，导致 $\frac{\partial A_K}{\partial \theta}$ 变成了深层连乘。
-:::
-
-$\frac{\partial A_K}{\partial \theta}$ 涉及 K 步速度网络的连乘——像 K 层深 RNN 的 BPTT，梯度指数爆炸。
-
-### 4.2 之前的"绕路"方案
-
-| 方法 | 策略 | 代价 |
-|------|------|------|
-| FQL | 蒸馏单步学生做 RL | 丢失多模态表达力 |
-| FlowRL | 近似 log-prob 做 PPO（不穿过 flow） | On-policy 效率低 |
-| ReinFlow | REINFORCE 估计器（不穿过 flow） | 高方差 |
-
-### 4.3 SAC-Flow 的正面突破：门控速度网络
-
-**核心公式**（GRU 门控速度网络）：
-
-$$
-v_\theta(t_i, A_{t_i}, s) = z_i \odot \tilde{v}_i + (1-z_i) \odot A_{t_i}
-$$
-
-**这个公式在做什么**：速度网络输出通过 GRU 门 $z_i$ 在"新计算的速度"和"上一步状态"之间插值。$(1-z_i)$ 项提供梯度直通道——反传时梯度可以不经过非线性变换直接流过，避免 K 步连乘爆炸。
-
-::: details 📐 逐符号拆解 + 数值代入（点击展开）
-**逐符号拆解**：
-
-| 符号 | 含义 | 直觉 |
-|------|------|------|
-| $v_\theta(t_i, A_{t_i}, s)$ | 第 $i$ 步的速度场最终输出 | "这一步动作该往哪走" |
-| $z_i \in [0,1]^d$ | GRU 门控值（每维独立） | "多大程度上采用新计算" |
-| $\tilde{v}_i$ | 候选速度（完全重新计算） | MLP/Transformer 的原始输出 |
-| $(1-z_i) \odot A_{t_i}$ | 跳跃连接（保持上一步） | 梯度直通道 |
-
-**数值代入**：$K=8$ 步 flow，假设所有步的 $z_i \approx 0.7$（70% 用新计算，30% 跳跃）。
-
-反传时梯度通过跳跃连接的衰减：$(1-z)^K = 0.3^8 = 0.00007$（指数衰减很快）。
-但 GRU 的 $z$ 是动态的——在梯度需要流过时，网络学会把某些维度的 $z$ 调低（接近 0），让梯度畅通。实测梯度范数在 K=8 步内变化 < 0.3（无门控时爆炸到 $10^6$+）。
-
-**为什么是这个形式**：和 LSTM 防梯度消失的原理完全相同——门控机制让网络自己学会"哪些路径让梯度通过、哪些路径切断"。残差连接是最简单的梯度高速公路。
-:::
-
-**两种架构变体**：
-
-| 变体 | 速度网络架构 | 适用场景 |
-|------|------------|---------|
-| Flow-G | GRU 门控 MLP | 低维控制（MuJoCo） |
-| Flow-T | Transformer decoder + 残差 | 高维 VLA（π₀ 级别） |
-
-**实验结果**：首次实现 SAC 端到端训练 K=8 步 Flow 策略。MuJoCo + OGBench 超过 FQL、FlowRL、DIME。梯度范数稳定（最大步间变化 0.29）。
-
----
-
-## 五、大对比表
-
-### 5.1 全方法横向对比
-
-| 方法 | 核心算法 | VLA 参数是否修改 | VLA 架构 | 所需交互量 | 典型成功率 | 计算代价 |
-|------|---------|----------------|---------|-----------|-----------|---------|
-| **PLD** | SAC + Residual + 蒸馏 | 蒸馏阶段修改（LoRA） | 任意 | ~100K steps | 89.8% | 低 |
-| **Object-Centric** | SAC + Residual | 不修改（冻结） | 任意 | 1h 仿真 | 72-85% 真机 | 极低 |
-| **RLPD** | SAC + 对称采样 | 全量修改 | 通用 | 中等 | SOTA 基线 | 中 |
-| **Sample-Efficient** | SAC variant | 轻量修改 | 任意 | ~500 rollouts | 85% | 中 |
-| **ConRFT** | Q-learning + Consistency | Action Head 修改 | Consistency | 50-100 episodes | 75% 真机 | 中 |
-| **SAC-Flow** | SAC 端到端 | 全量修改 | Flow | 标准 off-policy | SOTA | 高 |
-
-### 5.2 该选哪个？
+### 4.2 该选哪个？
 
 ```mermaid
 flowchart TD
-    A["你的核心约束是什么？"] -->|显存紧张 / 不想改 VLA| B["Residual RL<br/>PLD / Object-Centric"]
-    A -->|真实机器人 / 交互极少| C["ConRFT<br/>50 episodes 够用"]
-    A -->|有仿真 / 想最高性能| D["你的 VLA 是什么架构？"]
-    D -->|自回归 Token| E["Sample-Efficient RL<br/>RLPD 式混合训练"]
-    D -->|Flow Matching| F["SAC-Flow<br/>端到端训练"]
-    A -->|需要 Sim-to-Real 零迁移| G["Object-Centric Residual<br/>物体位姿输入"]
+    A["你的 Replay Buffer 会混入陈旧/离线数据吗？"] -->|不会，几乎全是当前策略新数据| B["近在线组：PLD / Object-Centric<br/>SAC 训小 Residual + clip 幅度"]
+    A -->|会，有一批示教/历史数据| C["混合组：你的交互预算有多少？"]
+    C -->|真实机器人，交互极少| D["ConRFT<br/>离线预训练 + 少量人工干预"]
+    C -->|有仿真，想要通用强基线| E["RLPD<br/>对称采样"]
+    C -->|想要更高采样效率| F["Sample-Efficient RL<br/>动态三区 Replay"]
 ```
 
 ---
 
-## 六、共性技巧与经验
+## 五、共性技巧与经验
 
-### 6.1 所有方法都在用的 Trick
+### 5.1 两组各自的技巧（不要混用）
 
-| Trick | 做法 | 适用方法 |
-|-------|------|---------|
-| **Q 网络集成** | 2-10 个 Q 网络取 min | RLPD, Sample-Efficient, SAC-Flow |
-| **高 UTD** | 每步更新 10-20 次 | RLPD, Sample-Efficient |
-| **LayerNorm** | Q 网络每层加 LayerNorm | RLPD, SAC-Flow |
-| **目标网络 EMA** | 慢速更新目标 Q | 所有 SAC 方法 |
-| **clip Residual** | $\|\Delta a\| \le \delta$ | PLD, Object-Centric |
-| **SFT 数据混入** | Replay Buffer 混入示教数据 | Sample-Efficient, ConRFT |
+| Trick | 做法 | 属于哪组 | 原因 |
+|-------|------|---------|------|
+| clip Residual 幅度 | $\|\Delta a\| \le \delta$ | 近在线 | 控制的是训练稳定性，混合组的问题不是幅度失控 |
+| 蒸馏迭代 | Residual→VLA 反复蒸馏 | 近在线 | 近在线组特有的"越训越轻松"正反馈循环 |
+| 对称采样 | 50% 在线 + 50% 离线 | 混合 | 近在线组没有离线数据可采 |
+| Q 网络集成 | 2-10 个 Q 取 min | 混合（也可用于近在线） | 对陌生动作保持谨慎；近在线组虽不必需，但加了也无害 |
+| 高 UTD | 每步更新 10-20 次 | 两组通用 | Off-Policy 的通用数据复用优势，和风险类型无关 |
+| SFT 数据混入 buffer | 直接把示教数据放进 Replay Buffer | 混合 | 定义上就是把方法从近在线推向混合区 |
 
-### 6.2 Off-Policy vs On-Policy 的实际性能对比
+**容易犯的错**：把"对称采样""Q ensemble"当成所有 Off-Policy 方法的标配去抄——如果你的场景本来就是近在线（buffer 里没有陈旧数据），这些机制解决的问题根本不存在，白白增加复杂度。先判断自己在谱系上的位置，再选机制。
 
-| 场景 | On-Policy 最佳 | Off-Policy 最佳 | 结论 |
-|------|---------------|----------------|------|
-| 有仿真、充足算力 | SimpleVLA-RL **94.2%** | PLD 89.8% | On-Policy 略优 |
-| 有仿真、节省交互 | PPO ~81% (5000 rollouts) | Sample-Efficient **85% (500 rollouts)** | Off-Policy **10× 效率** |
-| 真实机器人 | iRe-VLA 91% (需多轮迭代) | ConRFT **75% (30 min)** | Off-Policy 更实际 |
-| Flow VLA | FlowRL 81.2% | SAC-Flow **SOTA** | Off-Policy 更适合 Flow |
+### 5.2 Off-Policy vs On-Policy vs Offline 的实际性能对比
 
-**核心结论**：如果你关心**采样效率**（用最少交互达到目标性能），Off-Policy 几乎总是更好的选择。On-Policy 的优势仅在"仿真环境免费+最大化最终性能"时才显现。
+| 场景 | On-Policy 最佳 | Off-Policy 最佳 | Offline 最佳 |
+|------|---------------|----------------|-------------|
+| 有仿真、充足算力 | SimpleVLA-RL **94.2%** | PLD 89.8%（近在线） | — |
+| 有仿真、节省交互 | PPO ~81%（5000 rollouts） | Sample-Efficient **85%（500 rollouts）**（混合） | — |
+| 真实机器人 | iRe-VLA 91%（需多轮迭代） | ConRFT **96.3%（45-90 min）**（混合，贴近 Offline） | CO-RFT 67.5%（零交互，见 [Offline RL 综述](./S14_VLA_Offline_RL方法综述)） |
+
+**核心结论**：三者不是互相替代的选项，而是同一个"数据新鲜度—交互成本"权衡上的三个区域。近在线 Off-Policy 在"愿意持续交互、但要控制训练稳定性"时最优；混合 Off-Policy 在"交互预算有限，但还能做一点"时最优；纯 Offline 是"完全不能交互"时唯一的选择，代价是天花板更低（CO-RFT 67.5% vs ConRFT 96.3%）。
 
 ---
 
 ## 延伸阅读
 
-- [PLD 精读](./015_PLD_Residual_RL自改进VLA) — 三阶段自改进循环详解
-- [Object-Centric Residual RL 精读](./023_ObjectCentric_ResidualRL_零迁移VLA) — 零迁移技术细节
-- [RLPD 精读](./075_RLPD_高效在线RL利用离线数据) — 对称采样为什么有效
-- [Sample-Efficient RL 精读](./033_SampleEfficientRL_VLA_高采样效率RL微调) — VLA 特征 Critic
-- [ConRFT 精读](./010_ConRFT_一致性策略RL微调VLA) — 真机 Q-learning + 人工干预
-- [SAC-Flow 精读](./079_SAC_Flow_用SAC直接训练Flow策略) — 门控速度网络
+- [VLA On-Policy RL 方法综述](./S12_VLA_On_Policy_RL方法综述) — 谱系左端：数据永远新鲜，无过时问题
+- [VLA Offline RL 方法综述](./S14_VLA_Offline_RL方法综述) — 谱系右端：零交互，外推误差是唯一矛盾
+- [PLD 精读](./015_PLD_Residual_RL自改进VLA) — 近在线组，clip 幅度 + 蒸馏迭代
+- [Object-Centric Residual RL 精读](./023_ObjectCentric_ResidualRL_零迁移VLA) — 近在线组，零迁移技术细节
+- [RLPD 精读](./075_RLPD_高效在线RL利用离线数据) — 混合组，对称采样的理论分析
+- [Sample-Efficient RL 精读](./033_SampleEfficientRL_VLA_高采样效率RL微调) — 混合组，VLA 特征 Critic 架构
+- [ConRFT 精读](./010_ConRFT_一致性策略RL微调VLA) — 混合组，真机 Q-learning + 人工干预
+- [离线强化学习基础](/前置知识/000s_前置知识_离线强化学习基础) — 外推误差的完整定义
+- [CQL 保守 Q 学习](/前置知识/002g_前置知识_CQL保守Q学习) — 纯 Offline RL 如何处理同一个问题
 - [SAC 前置知识](/前置知识/000k_前置知识_SAC_Soft_Actor_Critic) — SAC 算法原理
-- [VLA On-Policy RL 方法综述](./S12_VLA_On_Policy_RL方法综述) — 对比：PPO/GRPO 路线
-- [VLA Offline RL 方法综述](./S14_VLA_Offline_RL方法综述) — 对比：纯离线路线

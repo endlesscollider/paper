@@ -375,13 +375,7 @@ export default withMermaid(defineConfig({
           { text: '论文精读', link: '/论文综述/#论文精读' },
         ]
       },
-      {
-        text: '前置知识',
-        items: [
-          { text: '前置知识目录', link: '/前置知识/' },
-          { text: '按标签搜索', link: '/prereq-search' },
-        ]
-      },
+      { text: '前置知识', link: '/前置知识/' },
       {
         text: '工程笔记',
         items: [
@@ -392,7 +386,7 @@ export default withMermaid(defineConfig({
       { text: '系列文章', link: '/系列/' },
       { text: '硬件基础', link: '/硬件基础/' },
       { text: '每日快报', link: '/每日快报/' },
-      { text: '按标签浏览', link: '/tags' },
+      { text: '🧭 找文章', link: '/tags' },
     ],
 
     sidebar: {

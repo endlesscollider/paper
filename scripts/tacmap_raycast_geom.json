@@ -1,0 +1,68 @@
+{
+  "output": "public/tacmap_raycast_geometry.png",
+  "title": "TacMap Ray-Cast Cross-Section (one row of the sensing grid)",
+  "xlabel": "lateral position along fingertip surface (mm)",
+  "ylabel": "depth into fingertip (mm)  -- larger = deeper inside",
+  "xlim": [-6, 6],
+  "ylim": [4.2, -1.2],
+  "figsize": [9, 5.5],
+  "grid": true,
+  "legend_loc": "lower right",
+  "reference_lines": [
+    {"y": 0.0, "color": "#607D8B", "style": "-", "linewidth": 2.2, "label": "S_s / S_u : undeformed sensor surface (z=0)"}
+  ],
+  "curves": [
+    {
+      "expr": "3.0 - 2.2*np.exp(-(x*x)/1.6)",
+      "x_range": [-6, 6, 400],
+      "label": "object surface z_o (a sphere pressing in)",
+      "color": "#F44336",
+      "linewidth": 2.5,
+      "fill_alpha": 0.07
+    },
+    {
+      "expr": "np.where(np.abs(x)<0.06, np.linspace(0,0.8,x.size), np.nan)",
+      "x_range": [-0.06, 0.06, 50],
+      "label": "ray hits object -> d>0",
+      "color": "#2196F3",
+      "linewidth": 2.5
+    },
+    {
+      "expr": "np.where(np.abs(x-3.0)<0.06, np.linspace(0,2.94,x.size), np.nan)",
+      "x_range": [2.94, 3.06, 50],
+      "color": "#2196F3",
+      "linewidth": 1.4,
+      "linestyle": ":"
+    },
+    {
+      "expr": "np.where(np.abs(x+1.5)<0.06, np.linspace(0,1.42,x.size), np.nan)",
+      "x_range": [-1.56, -1.44, 50],
+      "color": "#2196F3",
+      "linewidth": 1.4,
+      "linestyle": ":"
+    },
+    {
+      "expr": "np.where(np.abs(x-1.5)<0.06, np.linspace(0,1.42,x.size), np.nan)",
+      "x_range": [1.44, 1.56, 50],
+      "color": "#2196F3",
+      "linewidth": 1.4,
+      "linestyle": ":"
+    },
+    {
+      "expr": "np.where(np.abs(x+4.8)<0.06, np.linspace(0,3.6,x.size), np.nan)",
+      "x_range": [-4.86, -4.74, 50],
+      "label": "ray misses object -> d=0",
+      "color": "#FF9800",
+      "linewidth": 1.4,
+      "linestyle": ":"
+    }
+  ],
+  "points": [
+    {"x": 0.0, "y": 0.8, "color": "#4CAF50", "size": 9, "label_text": "d = z_o = 0.80mm (deepest)", "text_offset_x": 0.3, "text_offset_y": -0.5, "text_color": "#2e7d32"},
+    {"x": 3.0, "y": 2.94, "color": "#9C27B0", "size": 8, "label_text": "ray grazes rim -> small d", "text_offset_x": -3.5, "text_offset_y": 0.5, "text_color": "#6a1b9a"}
+  ],
+  "annotations": [
+    {"x": -5.9, "y": -0.9, "text": "rays start on S_s, shoot DOWN into fingertip along the surface normal", "color": "#37474F", "fontsize": 9},
+    {"x": -4.8, "y": -0.25, "text": "d=0", "color": "#e65100", "fontsize": 9, "ha": "center"}
+  ]
+}

@@ -70,6 +70,7 @@ config/migenrl/stack_can_drawer_bimanual_base.yaml
 
 相关工程实践文章：
 
+- [miGenRL 策略网络架构汇总](/工程实践/miGenRL_ACT策略网络架构汇总) — 本系列的网络侧横切总览：实测参数预算、张量形状、休眠开关清单，适合先读它建立全局印象再回来看第 06 章
 - [ACT Decoder 架构详解](/工程实践/ACT_Decoder架构详解) — 第 06 章会大量引用这篇的图示
 - [条件约束的 ACT 模型](/工程实践/条件约束的ACT模型)
 - [InterACT 与 ACT 的区别解析](/工程实践/InterACT与ACT的区别解析)

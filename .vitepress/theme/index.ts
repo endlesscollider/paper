@@ -9,6 +9,11 @@ import FocusModeToggle from './components/FocusModeToggle.vue'
 import RefPanel from './components/RefPanel.vue'
 import SidebarToggle from './components/SidebarToggle.vue'
 import PrereqSearch from './components/PrereqSearch.vue'
+import PhysicsPlayground from './components/PhysicsPlayground.vue'
+import GaussianCovariancePlayground from './components/GaussianCovariancePlayground.vue'
+import GaussianCovariance1DPlayground from './components/GaussianCovariance1DPlayground.vue'
+import GaussianCovariance2DPlayground from './components/GaussianCovariance2DPlayground.vue'
+import GaussianSplatPlayground from './components/GaussianSplatPlayground.vue'
 import './custom.css'
 import { h, onMounted, onUnmounted } from 'vue'
 import { setupMathCopy } from './composables/useMathCopy'
@@ -16,6 +21,7 @@ import { setupMermaidZoom } from './composables/useMermaidZoom'
 import { setupImageZoom } from './composables/useImageZoom'
 import { setupRefLinkIntercept } from './composables/useRefLinkIntercept'
 import { handleBeforeRouteChange, closeRefPanel, useRefPanel } from './composables/useRefPanel'
+import { useFocusHoverReveal } from './composables/useFocusHoverReveal'
 
 export default {
   extends: DefaultTheme,
@@ -25,6 +31,11 @@ export default {
     app.component('ArticleCard', ArticleCard)
     app.component('ReadProgressBadge', ReadProgressBadge)
     app.component('PrereqSearch', PrereqSearch)
+    app.component('PhysicsPlayground', PhysicsPlayground)
+    app.component('GaussianCovariancePlayground', GaussianCovariancePlayground)
+    app.component('GaussianCovariance1DPlayground', GaussianCovariance1DPlayground)
+    app.component('GaussianCovariance2DPlayground', GaussianCovariance2DPlayground)
+    app.component('GaussianSplatPlayground', GaussianSplatPlayground)
 
     if (typeof window !== 'undefined') {
       // 路由切换后重新初始化公式复制功能
@@ -52,6 +63,7 @@ export default {
       setupImageZoom()
       setupMermaidZoom()
       setupRefLinkIntercept()
+      useFocusHoverReveal()
 
       const { isOpen } = useRefPanel()
       const onKeydown = (e: KeyboardEvent) => {

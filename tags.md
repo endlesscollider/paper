@@ -1,6 +1,6 @@
 ---
 layout: page
-title: 按标签浏览
+title: 找文章
 ---
 
 <script setup>
@@ -9,7 +9,8 @@ import TagCloud from './.vitepress/theme/components/TagCloud.vue'
 
 <div class="tags-page">
   <div class="tags-page-header">
-    <h1 class="tags-page-title">按标签浏览</h1>
+    <h1 class="tags-page-title">🧭 找文章</h1>
+    <p class="tags-page-desc">全站文章浏览入口：先按内容类型筛一层，再按主题或标签定位。顶部导航栏的搜索框适合"我知道要找什么关键词"的临时查询；这里适合"我想看看某个方向都有什么"。</p>
   </div>
   <TagCloud />
 </div>
@@ -35,7 +36,14 @@ import TagCloud from './.vitepress/theme/components/TagCloud.vue'
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  margin: 0 0 8px 0;
+}
+
+.tags-page-desc {
   margin: 0;
+  color: var(--vp-c-text-2);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 @media (min-width: 768px) {

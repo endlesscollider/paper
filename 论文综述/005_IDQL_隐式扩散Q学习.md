@@ -80,6 +80,24 @@ $$
 \mathcal{L}_{\text{BC}} = \mathbb{E}_{(\mathbf{s},\mathbf{a})\sim\mathcal{D},\; k\sim U(1,K),\; \boldsymbol{\epsilon}\sim\mathcal{N}(\mathbf{0},\mathbf{I})} \left\|\boldsymbol{\epsilon}_\theta(\mathbf{a}_k, k, \mathbf{s}) - \boldsymbol{\epsilon}\right\|^2
 $$
 
+**这个公式在做什么**：让扩散网络学会从加噪的动作里猜出加了多少噪声——训练完之后，从纯噪声反复"去猜噪声再减掉"就能生成一个像数据集里的动作。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $(\mathbf{s},\mathbf{a})\sim\mathcal{D}$ | **数据集抽样** | 从离线数据集里随机抽一条 (状态, 动作) 对 |
+| $k\sim U(1,K)$ | **随机加噪程度** | 随机选一个扩散时间步，决定往 $\mathbf{a}$ 里加多少噪声 |
+| $\boldsymbol{\epsilon}\sim\mathcal{N}(\mathbf{0},\mathbf{I})$ | **真实噪声** | 实际叠加到动作上的高斯噪声，也是网络要猜的目标 |
+| $\boldsymbol{\epsilon}_\theta(\mathbf{a}_k, k, \mathbf{s})$ | **网络的猜测** | 网络看到加噪后的动作 $\mathbf{a}_k$、噪声程度 $k$、状态 $\mathbf{s}$，猜"刚才加的噪声是什么样子" |
+| $\|\boldsymbol{\epsilon}_\theta(\cdot)-\boldsymbol{\epsilon}\|^2$ | **猜测误差** | 网络猜的噪声和真实噪声的均方差 |
+| $\mathbb{E}[\cdot]$ | **训练时的近似** | 实际训练中用 mini-batch 抽样求平均代替这个期望 |
+
+**用人话读**："随机抽一个（状态, 动作），往动作上加一点随机噪声，让网络根据加噪后的样子和状态猜出加了什么噪声，猜错多少就是 loss。"
+
+**为什么是这个形式**：这是标准 DDPM 去噪训练目标，直接搬来做行为克隆——训练目标只关心"学会数据集里的动作分布"，完全不涉及奖励，所以这一步和普通 [Diffusion Policy](/前置知识/000c_前置知识_Diffusion_Policy) 的 BC 训练没有任何区别。
+:::
+
 策略 $\pi_\beta$ 纯粹拟合数据分布，不做任何奖励相关优化。
 
 ### 2.3 IQL 风格的 $Q$ 函数训练
@@ -92,6 +110,23 @@ $$
 \mathcal{L}_Q = \mathbb{E}_{(\mathbf{s},\mathbf{a},r,\mathbf{s}')\sim\mathcal{D}}\left[\left(Q(\mathbf{s},\mathbf{a}) - r - \gamma V(\mathbf{s}')\right)^2\right]
 $$
 
+**这个公式在做什么**：让 $Q$ 网络学会预测"这一步的即时奖励加上未来能拿到的价值"，用 $V(\mathbf{s}')$ 代替标准 Q-Learning 里那个求不出来的 $\max_{\mathbf{a}'}Q(\mathbf{s}',\mathbf{a}')$。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $(\mathbf{s},\mathbf{a},r,\mathbf{s}')\sim\mathcal{D}$ | **一条转移记录** | 从离线数据集里抽一条"状态-动作-奖励-下一状态" |
+| $r+\gamma V(\mathbf{s}')$ | **回归目标** | 即时奖励加上打折的下一状态价值，代替了标准 Q-Learning 里的 $r+\gamma\max_{a'}Q(s',a')$ |
+| $Q(\mathbf{s},\mathbf{a})$ | **当前预测** | $Q$ 网络对这条记录给出的价值估计 |
+| $(Q-r-\gamma V(\mathbf{s}'))^2$ | **预测误差** | 预测值和目标值的均方差，就是要最小化的量 |
+| $\mathbb{E}[\cdot]$ | **训练时的近似** | 实际训练用 mini-batch 抽样求平均 |
+
+**用人话读**："让 $Q$ 网络预测的值，尽量接近'这一步奖励 + 下一状态的价值 $V$'，误差就是训练信号。"
+
+**为什么用 $V(\mathbf{s}')$ 而不是 $\max_{a'}Q(s',a')$**：连续高维动作空间下，对 $Q(s',\cdot)$ 做全局最大化本身就是一个难解的优化问题；IQL 的做法是单独训练一个 $V(\mathbf{s}')$ 来隐式近似这个 max（原理见下一条公式），$Q$ 训练时直接用它当目标，避免了每步都要解一次 $\arg\max$。
+:::
+
 **V 更新**（Expectile 回归，关键！）：
 
 $$
@@ -100,7 +135,22 @@ $$
 
 其中 $L_\tau(u) = |\tau - \mathbb{1}(u < 0)| \cdot u^2$ 是 expectile loss，$\tau > 0.5$（通常 0.7–0.9）。
 
-**为什么 expectile 能近似 max**：当 $\tau > 0.5$ 时，低估（$Q > V$）的惩罚远大于高估（$Q < V$），所以 $V$ 被推向 $Q$ 分布的上尾部 → $V(\mathbf{s}) \approx \max_{\mathbf{a}} Q(\mathbf{s}, \mathbf{a})$。$\tau$ 越接近 1，近似越紧。
+**这个公式在做什么**：用一种"不对称惩罚"的回归让 $V(\mathbf{s})$ 悄悄逼近 $Q(\mathbf{s},\cdot)$ 分布里比较高的那一段，从而不用真的做 $\max$ 运算就能近似出"这个状态下最好能拿多少分"。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $Q(\mathbf{s},\mathbf{a})-V(\mathbf{s})$ | **残差** | 数据集里这个动作的 $Q$ 值和当前 $V$ 估计的差 |
+| $\mathbb{1}(u<0)$ | **方向判断器** | 判断残差是负的（$V$ 高估了）还是正的（$V$ 低估了） |
+| $\|\tau-\mathbb{1}(u<0)\|$ | **不对称权重** | $\tau>0.5$ 时，低估（$u>0$，权重 $=\tau$）的惩罚大于高估（$u<0$，权重 $=1-\tau$）的惩罚 |
+| $L_\tau(u)=\|\tau-\mathbb{1}(u<0)\|\cdot u^2$ | **expectile loss** | 把不对称权重乘到平方误差上，整体作为 $V$ 的训练损失 |
+| $\mathbb{E}_{(\mathbf{s},\mathbf{a})\sim\mathcal{D}}[\cdot]$ | **训练时的近似** | mini-batch 抽样求平均 |
+
+**用人话读**："让 $V$ 去拟合 $Q$，但故意让'$V$ 猜低了'的惩罚比'猜高了'的惩罚更重，逼着 $V$ 悄悄往 $Q$ 分布的高分区域靠。"
+
+**为什么 expectile 能近似 max**：当 $\tau>0.5$ 时，低估（$Q>V$）的惩罚远大于高估（$Q<V$）的惩罚，所以 $V$ 被推向 $Q$ 分布的上尾部，$V(\mathbf{s})\approx\max_{\mathbf{a}}Q(\mathbf{s},\mathbf{a})$；$\tau$ 越接近 1，近似越紧。这样就绕开了连续动作空间里直接求 $\max$ 的难题。
+:::
 
 ### 2.4 推理时的动作选择
 
@@ -118,6 +168,22 @@ flowchart LR
 $$
 \mathbf{a}^* = \arg\max_{i \in \{1,\ldots,M\}} Q(\mathbf{s}, \mathbf{a}_i), \quad \mathbf{a}_i \sim \pi_\beta(\cdot|\mathbf{s})
 $$
+
+**这个公式在做什么**：从行为策略 $\pi_\beta$ 里抽 $M$ 个候选动作，让 $Q$ 函数给每个候选打分，直接挑分最高的执行——策略本身完全没变，改进来自"事后挑选"。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\mathbf{a}_i\sim\pi_\beta(\cdot\|\mathbf{s})$ | **候选动作生成器** | 用训练好的扩散行为策略，在状态 $\mathbf{s}$ 下独立采样出 $M$ 个候选动作 |
+| $Q(\mathbf{s},\mathbf{a}_i)$ | **打分员** | 用训练好的 $Q$ 网络给每个候选动作评分 |
+| $\arg\max_{i\in\{1,\ldots,M\}}$ | **选拔赛** | 在 $M$ 个候选里挑出打分最高的那一个 |
+| $\mathbf{a}^*$ | **最终执行的动作** | 被选中的、实际发给环境执行的动作 |
+
+**用人话读**："让行为策略随便生成几十个候选动作，$Q$ 函数逐个打分，直接执行分数最高的那个。"
+
+**为什么是这个形式**：策略改进不需要修改网络参数，只需要在推理时"多生成几个、选最好的"——这是一种基于拒绝采样的隐式策略改进，好处是训练侧完全解耦（$\pi_\beta$ 和 $Q$ 各自独立训练），代价是推理时要多次采样+打分。
+:::
 
 或者用 softmax 加权采样：$w_i \propto \exp\!\left(\beta \cdot Q(\mathbf{s}, \mathbf{a}_i)\right)$。
 

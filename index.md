@@ -16,7 +16,7 @@ hero:
       text: 工程笔记
       link: /工程实践/
     - theme: alt
-      text: 按标签浏览
+      text: 🧭 找文章
       link: /tags
 
 features:
@@ -43,43 +43,63 @@ features:
 ---
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { withBase } from 'vitepress'
 import { data as articles } from './.vitepress/theme/articles.data.mts'
 import ArticleCard from './.vitepress/theme/components/ArticleCard.vue'
 
-// 按星级排序的推荐文章
-const topArticles = computed(() => {
-  return [...articles]
-    .sort((a, b) => b.star - a.star || a.order - b.order)
-    .slice(0, 6)
+const PAGE_STEP = 12 // 每次"展开更多"增加的卡片数
+
+// 每个板块各自维护"当前显示数量"，默认展示一行 4 张 × 3 行 = 12 张
+const visibleCounts = reactive({
+  recent: PAGE_STEP,
+  top: PAGE_STEP,
+  latest: PAGE_STEP,
 })
 
-// 最新文章（按 lastUpdated 降序 = 最近修改的排最前）
-const latestArticles = computed(() => {
-  return [...articles]
-    .sort((a, b) => b.lastUpdated - a.lastUpdated)
-    .slice(0, 6)
-})
-
-// 最近浏览
-const recentlyViewed = ref([])
+// 最近浏览（本地记录，不受展开数量限制影响排序）
+const recentlyViewedRaw = ref([])
 
 onMounted(() => {
   try {
     const raw = localStorage.getItem('recently-viewed-articles')
     if (raw) {
-      const items = JSON.parse(raw).slice(0, 6)
+      const items = JSON.parse(raw)
       // 将 recently-viewed 的 item 与 articles 数据匹配，补全 star/category/tags
-      recentlyViewed.value = items.map(item => {
-        const match = articles.find(a => a.link === item.link)
+      // 兼容旧数据：早期版本存的 link 是浏览器 percent-encode 过的中文路径，
+      // 和 articles.data.mts 里的明文 Unicode link 对不上，需要 decode 后再匹配，
+      // 否则卡片会退化成没有分类/标签/星级的空壳
+      recentlyViewedRaw.value = items.map(item => {
+        let decodedLink = item.link
+        try {
+          decodedLink = decodeURIComponent(item.link)
+        } catch {}
+        const match = articles.find(a => a.link === decodedLink || a.link === item.link)
         return match
           ? { ...match }
-          : { title: item.title, link: item.link, star: 0, category: '', tags: [] }
+          : { title: item.title, link: decodedLink, star: 0, category: '', tags: [] }
       })
     }
   } catch {}
 })
+
+const recentlyViewed = computed(() => recentlyViewedRaw.value.slice(0, visibleCounts.recent))
+
+// 按星级排序的推荐文章
+const topArticlesAll = computed(() => {
+  return [...articles].sort((a, b) => b.star - a.star || a.order - b.order)
+})
+const topArticles = computed(() => topArticlesAll.value.slice(0, visibleCounts.top))
+
+// 最新文章（按 lastUpdated 降序 = 最近修改的排最前）
+const latestArticlesAll = computed(() => {
+  return [...articles].sort((a, b) => b.lastUpdated - a.lastUpdated)
+})
+const latestArticles = computed(() => latestArticlesAll.value.slice(0, visibleCounts.latest))
+
+function expandSection(key, total) {
+  visibleCounts[key] = Math.min(visibleCounts[key] + PAGE_STEP, total)
+}
 
 // 统计
 const tagStats = computed(() => {
@@ -114,12 +134,12 @@ const tagStats = computed(() => {
 </div>
 
 <!-- 最近浏览 -->
-<div class="section-block" v-if="recentlyViewed.length">
+<div class="section-block" v-if="recentlyViewedRaw.length">
   <div class="section-header">
     <h2>🕐 最近浏览</h2>
     <span class="section-desc">继续上次的阅读</span>
   </div>
-  <div class="article-grid">
+  <div class="article-grid compact-grid">
     <ArticleCard
       v-for="item in recentlyViewed"
       :key="item.link"
@@ -129,7 +149,18 @@ const tagStats = computed(() => {
       :category="item.category"
       :tags="item.tags"
       :series="item.series"
+      compact
+      :max-tags="3"
     />
+  </div>
+  <div class="section-footer">
+    <button
+      v-if="visibleCounts.recent < recentlyViewedRaw.length"
+      class="expand-btn"
+      @click="expandSection('recent', recentlyViewedRaw.length)"
+    >
+      展开更多 ↓
+    </button>
   </div>
 </div>
 
@@ -139,7 +170,7 @@ const tagStats = computed(() => {
     <h2>⭐ 高分推荐</h2>
     <span class="section-desc">引用量高、顶会发表、顶级机构出品</span>
   </div>
-  <div class="article-grid">
+  <div class="article-grid compact-grid">
     <ArticleCard
       v-for="article in topArticles"
       :key="article.link"
@@ -149,7 +180,19 @@ const tagStats = computed(() => {
       :category="article.category"
       :tags="article.tags"
       :series="article.series"
+      compact
+      :max-tags="3"
     />
+  </div>
+  <div class="section-footer">
+    <button
+      v-if="visibleCounts.top < topArticlesAll.length"
+      class="expand-btn"
+      @click="expandSection('top', topArticlesAll.length)"
+    >
+      展开更多 ↓
+    </button>
+    <a class="view-all-btn" :href="withBase('/tags?sort=star')">查看全部 →</a>
   </div>
 </div>
 
@@ -159,7 +202,7 @@ const tagStats = computed(() => {
     <h2>🆕 最新收录</h2>
     <span class="section-desc">新鲜出炉的论文和笔记</span>
   </div>
-  <div class="article-grid">
+  <div class="article-grid compact-grid">
     <ArticleCard
       v-for="article in latestArticles"
       :key="article.link"
@@ -169,7 +212,19 @@ const tagStats = computed(() => {
       :category="article.category"
       :tags="article.tags"
       :series="article.series"
+      compact
+      :max-tags="3"
     />
+  </div>
+  <div class="section-footer">
+    <button
+      v-if="visibleCounts.latest < latestArticlesAll.length"
+      class="expand-btn"
+      @click="expandSection('latest', latestArticlesAll.length)"
+    >
+      展开更多 ↓
+    </button>
+    <a class="view-all-btn" :href="withBase('/tags?sort=new')">查看全部 →</a>
   </div>
 </div>
 
@@ -186,7 +241,7 @@ const tagStats = computed(() => {
 </div>
 
 <div class="view-all-section">
-  <a :href="withBase('/tags')" class="view-all-link">查看全部文章 →</a>
+  <a :href="withBase('/tags')" class="view-all-link">🧭 找文章：按主题浏览全部 →</a>
 </div>
 
 </div>
@@ -275,6 +330,71 @@ const tagStats = computed(() => {
   .article-grid {
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   }
+}
+
+/* 首页板块用的紧凑网格：一行最多 4 张卡片，卡片更小更浓缩 */
+.compact-grid {
+  gap: 10px;
+}
+
+@media (min-width: 480px) {
+  .compact-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 900px) {
+  .compact-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1152px) {
+  .compact-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* 板块底部：展开更多 / 查看全部 */
+.section-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.expand-btn {
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-2);
+  transition: all 0.2s;
+}
+
+.expand-btn:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+}
+
+.view-all-btn {
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--vp-c-brand-1);
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.view-all-btn:hover {
+  background: var(--vp-c-brand-soft);
 }
 
 /* 热门标签 */

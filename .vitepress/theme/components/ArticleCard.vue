@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { withBase } from 'vitepress'
 import { getAllProgress } from '../composables/useReadProgress'
 
@@ -11,7 +11,12 @@ const props = defineProps({
   tags: { type: Array, default: () => [] },
   showProgress: { type: Boolean, default: true },
   series: { type: Object, default: null }, // { id, totalChapters, dir }
+  compact: { type: Boolean, default: false }, // 紧凑模式：更小的字号/间距，用于首页卡片墙
+  maxTags: { type: Number, default: 99 }, // 最多显示的标签数，超出部分折叠为 "+N"
 })
+
+const visibleTags = computed(() => props.tags.slice(0, props.maxTags))
+const hiddenTagsCount = computed(() => Math.max(0, props.tags.length - props.maxTags))
 
 const progressLabel = ref('')
 const progressClass = ref('')
@@ -103,7 +108,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <a :href="withBase(link.endsWith('.html') ? link : link + '.html')" class="article-card">
+  <a :href="withBase(link.endsWith('.html') ? link : link + '.html')" class="article-card" :class="{ compact }">
     <!-- 右上角浏览进度 -->
     <span v-if="progressLabel" class="card-progress" :class="progressClass">
       {{ progressLabel }}
@@ -113,16 +118,18 @@ onMounted(() => {
         <h3 class="article-title">{{ title }}</h3>
         <span v-if="star" class="article-stars" :title="star + ' 星'">
           <span v-for="s in star" :key="s" class="star filled">★</span>
-          <span v-for="s in (5 - star)" :key="'e' + s" class="star empty">☆</span>
+          <template v-if="!compact">
+            <span v-for="s in (5 - star)" :key="'e' + s" class="star empty">☆</span>
+          </template>
         </span>
       </div>
       <div class="article-meta">
         <span v-if="seriesLabel" class="article-series-badge">📖 {{ seriesLabel }}</span>
         <span v-if="category" class="article-category">{{ category }}</span>
-        <span v-for="tag in tags" :key="tag" class="article-tag">{{ tag }}</span>
+        <span v-for="tag in visibleTags" :key="tag" class="article-tag">{{ tag }}</span>
       </div>
     </div>
-    <div class="article-arrow">→</div>
+    <div v-if="!compact" class="article-arrow">→</div>
   </a>
 </template>
 
@@ -130,7 +137,7 @@ onMounted(() => {
 .article-card {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 20px;
   border-radius: 12px;
@@ -196,11 +203,6 @@ onMounted(() => {
   color: var(--vp-c-text-1);
   margin: 0;
   line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   flex: 1;
 }
 
@@ -268,6 +270,7 @@ onMounted(() => {
   transition: all 0.25s ease;
   margin-left: 12px;
   flex-shrink: 0;
+  align-self: center;
 }
 
 .article-card:hover .article-arrow {
@@ -282,5 +285,48 @@ onMounted(() => {
 
 :global(.dark) .article-card:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* ===== 紧凑模式：用于首页卡片墙，一行放更多卡片 ===== */
+.article-card.compact {
+  padding: 12px 14px;
+  border-radius: 10px;
+  align-items: flex-start;
+}
+
+.article-card.compact .article-title-row {
+  margin-bottom: 6px;
+}
+
+.article-card.compact .article-title {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.article-card.compact .article-stars {
+  font-size: 11px;
+}
+
+.article-card.compact .article-meta {
+  gap: 4px;
+}
+
+.article-card.compact .article-category,
+.article-card.compact .article-tag,
+.article-card.compact .article-series-badge {
+  font-size: 10.5px;
+  padding: 1px 7px;
+}
+
+.article-card.compact .card-progress {
+  font-size: 10px;
+  padding: 1px 6px;
+  top: 8px;
+  right: 10px;
+}
+
+.article-tag-more {
+  color: var(--vp-c-text-4, #999) !important;
+  background: transparent !important;
 }
 </style>

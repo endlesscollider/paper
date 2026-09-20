@@ -224,14 +224,19 @@ $$
 
 **这个公式在做什么**：把像素空间的帧数（`num_frames`）换算成 VAE 编码之后 latent 空间的帧数。
 
-**逐符号拆解**：
+::: details 📐 公式详解（点击展开）
 
-| 符号 | 含义 | 具体取值/来源 |
-|---|---|---|
-| `num_frames` | 期望的像素视频帧数 | 训练配置里 `wan_num_frames=81` |
-| `vae_temporal_scale` | VAE 时间维压缩倍数 | `self.vae.config.temporal_compression_ratio`，默认取 4，和第 2 章给出的 `scale_factor_temporal=4` 一致 |
-| $-1$、$+1$ | 对应 VAE 的 causal 时间压缩规则：第一帧单独映射成 latent 第一帧，之后每 4 帧压缩成 1 帧 | 第 2 章推导过完全相同的公式 `T_latent = 1 + (T_pixel - 1) // 4` |
-| $\lfloor \cdot \rfloor$ | 向下取整 | Python 的整数除法 `//` |
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| `num_frames` | **原始帧数** | 期望的像素视频帧数，训练配置里 `wan_num_frames=81` |
+| `vae_temporal_scale` | **时间压缩倍数** | `self.vae.config.temporal_compression_ratio`，默认取 4，和第 2 章给出的 `scale_factor_temporal=4` 一致 |
+| $-1$、$+1$ | **首帧特殊处理** | 对应 VAE 的 causal 时间压缩规则：第一帧单独映射成 latent 第一帧，之后每 4 帧压缩成 1 帧 |
+| $\lfloor\cdot\rfloor$ | **向下取整** | Python 的整数除法 `//`，处理除不尽的情况 |
+
+**用人话读**："先把第一帧单独拿出来，剩下的帧每 4 帧压成 1 帧，压缩后的帧数加上第一帧，就是 latent 空间里的总帧数。"
+
+**为什么是这个形式**：因为 VAE 的时间压缩是 causal 的（详见 [3D 卷积与 Causal 卷积](/前置知识/002a_前置知识_3D卷积与Causal卷积)）——第一帧不参与"每 4 帧压 1 帧"的常规压缩，而是单独映射成 latent 的第一帧，这也是为什么后续帧要单独处理成"条件帧 + 随后若干帧"这种结构，而不是均匀地把 81 帧压成 81/4 帧。第 2 章推导过完全相同的公式 `T_latent = 1 + (T_pixel - 1) // 4`。
+:::
 
 **代入数字**：`num_frames=81`，`vae_temporal_scale=4`：
 
@@ -239,9 +244,20 @@ $$
 \text{num\_latent\_frames} = \left\lfloor \frac{81-1}{4} \right\rfloor + 1 = \left\lfloor \frac{80}{4} \right\rfloor + 1 = 20+1 = 21
 $$
 
-算出来是 21——这正好对上训练配置里 `Former_num_time_embeds=21` 这个数字（第 8 章提到过 `Video_Former` 按每帧分配潜变量，需要知道总共有多少帧）。这不是巧合：下游的 `Video_Former` 必须提前知道特征提取会产出多少个时间步的 token，才能正确分配 Perceiver 潜变量,这个 21 就是这个约束的来源。
+**这个公式在做什么**：把上面的抽象公式代入训练配置的真实数字，算出这次特征提取实际用到的 latent 帧数是 21。
 
-**为什么是"公式" 而不是简单的除法**：因为 VAE 的时间压缩是 causal 的（详见 [3D 卷积与 Causal 卷积](/前置知识/002a_前置知识_3D卷积与Causal卷积)）——第一帧不参与"每 4 帧压 1 帧"的常规压缩，而是单独映射成 latent 的第一帧,这也是为什么后续帧要单独处理成"条件帧 + 随后若干帧"这种结构,而不是均匀地把 81 帧压成 81/4 帧。
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $81-1=80$ | **需要常规压缩的帧数** | 去掉单独处理的第一帧后剩下的帧数 |
+| $80/4=20$ | **压缩后的帧数** | 剩余帧按 4:1 压缩比换算成 latent 帧数 |
+| $20+1=21$ | **最终 latent 帧数** | 压缩后的 20 帧加上单独处理的第一帧 |
+
+**用人话读**："81 像素帧，去掉第一帧后剩 80 帧压缩成 20 帧，加回第一帧，一共是 21 个 latent 帧。"
+
+**为什么是这个形式**：算出来是 21——这正好对上训练配置里 `Former_num_time_embeds=21` 这个数字（第 8 章提到过 `Video_Former` 按每帧分配潜变量，需要知道总共有多少帧）。这不是巧合：下游的 `Video_Former` 必须提前知道特征提取会产出多少个时间步的 token，才能正确分配 Perceiver 潜变量，这个 21 就是这个约束的来源。
+:::
 
 深度分支的构造逻辑完全一样，只是条件帧的来源不同——如果调用方提供了预计算的深度图 `depth_cond`，直接编码它；否则调用 `_estimate_depth_latent` 在线用 DA3（Depth-Anything-3）估计一份深度图出来，这是下一节要展开的兜底机制：
 
@@ -359,6 +375,21 @@ $$
 N = F_{tok} \times H_{tok} \times W_{tok} = 21 \times 7 \times 7 = 1029
 $$
 
+**这个公式在做什么**：算出单个分支（video/depth/flow 三者之一）经过 Patch Embedding 降采样之后，一共产出多少个 token。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $F_{tok}=21$ | **时间维 token 数** | `patch_size` 的时间维是 1（不压缩），所以等于上一节算出来的 latent 帧数 21 |
+| $H_{tok}=W_{tok}=7$ | **空间维 token 数** | VAE 已把 224 压到 14，`patch_size` 的空间维是 2，再压一次变成 $14/2=7$ |
+| $F_{tok}\times H_{tok}\times W_{tok}$ | **展平后的 token 总数** | 把时间、高、宽三个维度的格子数相乘，就是这个分支被切成的 token 数量（类比 ViT 把图片切成 patch 再展平成序列） |
+
+**用人话读**："这个分支的特征图在时间上有 21 个格子、高和宽上各有 7 个格子，展平成一条序列后一共是 $21\times7\times7=1029$ 个 token。"
+
+**为什么是这个形式**：Transformer 处理的是一维 token 序列，所以任何多维的时空特征图在送入 attention 之前，都要先按"时间 × 高 × 宽"展平成一条序列——这是 ViT/DiT 类模型的标准做法。
+:::
+
 三分支拼接后的序列长度是 $3N = 3087$。接下来 `forward` 要把这个拼在一起的长序列**拆开**、分别 reshape 回 5 维张量、再沿另一个维度重新拼起来：
 
 ```python
@@ -381,17 +412,20 @@ $$
 
 **这个公式在做什么**:算出拼接之后每个 token 的最终特征维度。
 
-**逐符号拆解**:
+::: details 📐 公式详解（点击展开）
 
-| 符号 | 含义 | 取值 |
-|---|---|---|
-| `inner_dim` | 单个分支、单个 token 的隐层维度 | 3072（`num_attention_heads × attention_head_dim`,第 2 章给出） |
-| $n_{\text{branches}}$ | 参与拼接的分支数 | 3(video/depth/flow),`backbone="wan"` 单分支模式下取 1 |
-| `condition_dim` | 每个空间-时间位置最终的特征向量长度 | $3072 \times 3 = 9216$ |
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\text{inner\_dim}$ | **单分支的特征宽度** | 单个分支、单个 token 的隐层维度，值为 3072（`num_attention_heads × attention_head_dim`，第 2 章给出） |
+| $n_{\text{branches}}$ | **参与拼接的分支数** | video/depth/flow 三个分支，值为 3；`backbone="wan"` 单分支模式下取 1 |
+| $\text{condition\_dim}$ | **拼接后的最终宽度** | 每个空间-时间位置最终的特征向量长度，$3072\times3=9216$ |
 
-**代入数字**:三个 `(B,21,3072,7,7)` 沿 `dim=2` 拼接后,形状变成 `(B, 21, 9216, 7, 7)`——这正是 `forward` 最终返回的形状 `(B, F_tok, condition_dim, H_tok, W_tok)`,数值上 $F_{tok}=21$、$\text{condition\_dim}=9216$、$H_{tok}=W_{tok}=7$,和第 8 章速查表里给出的数字完全对上。
+**用人话读**："每个分支给每个 token 输出 3072 维特征，三个分支的特征沿 channel 维接在一起，最终每个 token 变成 9216 维。"
 
 **为什么要在 channel 维拼接,而不是继续留在 token 维**:如果三分支特征始终按 token 维拼接、不做这次 reshape,下游拿到的是一条长度 3087 的 token 序列——`Video_Former`(下一章要讲的 Perceiver Resampler)需要知道"哪几个 token 对应同一个空间位置的三种模态",按 token 维摆放的话,同一个空间位置的 RGB/深度/光流特征互相隔开了上千个 token 的距离,压缩时的 Cross-Attention 没办法直接把它们当作"一个位置的完整信息"来处理。把三分支拼进 channel 维之后,每一个 token(对应一个具体的时空位置)天然自带 9216 维、揉合了三种模态的完整描述——这才是 `Video_Former` 期望拿到的输入形式。
+
+**代入数字**:三个 `(B,21,3072,7,7)` 沿 `dim=2` 拼接后,形状变成 `(B, 21, 9216, 7, 7)`——这正是 `forward` 最终返回的形状 `(B, F_tok, condition_dim, H_tok, W_tok)`,数值上 $F_{tok}=21$、$\text{condition\_dim}=9216$、$H_{tok}=W_{tok}=7$,和第 8 章速查表里给出的数字完全对上。
+:::
 
 `forward` 里 `use_all_layer` 这个开关(如果配置了多个 `extract_block_idx`)决定的是要不要再把不同层的输出也沿 channel 维拼接;默认 `use_all_layer=False` 时,只取 `extract_block_idx` 列表的最后一层输出,直接返回:
 

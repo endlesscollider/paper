@@ -99,9 +99,40 @@ veRL 原本只支持文本生成（LLM RLHF）。SimpleVLA-RL 做了以下适配
 $$
 \text{veRL 原版}: \quad \text{text} \xrightarrow{\text{reward model}} r \in \mathbb{R}
 $$
+
+**这个公式在做什么**：说明 veRL 原本的"环境"只是一个打分器——输入一段文本，输出一个标量奖励，没有真正的状态转移。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\text{text}$ | **唯一的输入** | LLM 生成的一段文本（如一次对话回复） |
+| $\xrightarrow{\text{reward model}}$ | **打分动作** | 用一个训练好的 reward model 网络对这段文本评分，这个过程不改变"状态"，只产生一个数 |
+| $r \in \mathbb{R}$ | **最终输出** | 一个标量分数，代表这段文本有多好 |
+
+**用人话读**："veRL 原本设计的环境，就是拿一段生成的文本去过一遍打分模型，吐出一个分数，仅此而已——没有'下一个状态'的概念。"
+
+**为什么是这个形式**：LLM RLHF 里没有物理世界的状态转移，"环境交互"本质上退化成"打分"，所以 veRL 原版只需要一个 reward model 接口，比真正的 RL 环境简单得多。
+:::
+
 $$
 \text{SimpleVLA-RL}: \quad (o_t, a_t) \xrightarrow{\text{physics sim}} (o_{t+1}, r_t, \text{done})
 $$
+
+**这个公式在做什么**：说明 SimpleVLA-RL 把 veRL 的"打分器"替换成了真正的物理仿真环境——输入当前观测和动作，输出下一步观测、奖励、以及任务是否结束。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $(o_t, a_t)$ | **当前局面** | 当前时刻的图像观测 $o_t$ 和机器人执行的动作 $a_t$ |
+| $\xrightarrow{\text{physics sim}}$ | **物理引擎推演** | 仿真器根据动力学规律，把当前局面推演到下一时刻 |
+| $(o_{t+1}, r_t, \text{done})$ | **推演结果三件套** | 下一步的新观测、这一步拿到的奖励、以及任务是否终止的标志 |
+
+**用人话读**："机器人在当前画面下做了一个动作，物理仿真器算出'接下来会看到什么画面、这一步得多少分、任务是不是结束了'。"
+
+**为什么是这个形式**：这正是标准 MDP（马尔可夫决策过程）的状态转移接口——真正的机器人 RL 必须有状态转移和终止信号，这是 SimpleVLA-RL 对 veRL 做的第一个关键工程扩展，把"打分器"换成了"闭环环境"。
+:::
 
 **扩展 2：多模态输入处理**
 
@@ -111,6 +142,22 @@ $$
 \text{输入} = \text{ViT}(o_t) \oplus \text{Tokenize}(\text{instruction})
 $$
 
+**这个公式在做什么**：说明 rollout worker 怎么把"图像"和"文字指令"拼成一个统一的输入序列，喂给 VLA 模型。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\text{ViT}(o_t)$ | **图像翻译官** | 用视觉 Transformer（ViT，Vision Transformer，一种把图像切成小块再用 Transformer 编码的视觉骨干网络）把图像 $o_t$ 转成一串向量 |
+| $\text{Tokenize}(\text{instruction})$ | **文字翻译官** | 把语言指令（如"把罐头推到桌边"）切成 token 序列 |
+| $\oplus$ | **拼接工** | 把图像 token 序列和文字 token 序列首尾接起来，变成一条统一序列 |
+| $\text{输入}$ | **最终喂给模型的东西** | 拼接后的完整输入序列，直接送进 VLA 的 Transformer |
+
+**用人话读**："把这一帧画面编码成一串向量，把指令文字切成 token，两串拼在一起，就是模型看到的输入。"
+
+**为什么是这个形式**：LLM 的 rollout 只需要处理纯文本 token，而 VLA 每一步都要重新处理一帧新画面——所以 SimpleVLA-RL 必须在 rollout worker 里额外集成图像编码器，并把图像和文本统一成同一种 token 序列格式，才能复用 veRL 原本为纯文本设计的 Transformer 推理流程。
+:::
+
 **扩展 3：Action Chunking 支持**
 
 VLA 模型通常一次预测多步动作（action chunk），而不是单步。SimpleVLA-RL 支持 chunk-level 的 log-prob 计算：
@@ -119,12 +166,22 @@ $$
 \log \pi_\theta(\mathbf{a}_{t:t+H} | s_t) = \sum_{h=0}^{H-1} \sum_{i=1}^{d} \log \pi_\theta(a_{t+h, i} | s_t, a_{t:t+h-1})
 $$
 
-**逐项拆解**：
-- $H$：action chunk 的长度（如 4 步）
-- $d$：每步动作的维度数（如 7 维：xyz + rotation + gripper）
-- $a_{t+h, i}$：chunk 中第 $h$ 步的第 $i$ 维动作 token
-- 外层求和：跨 chunk 内的步数
-- 内层求和：跨动作维度
+**这个公式在做什么**：算出策略一次性预测一整个动作 chunk（连续 $H$ 步动作）的对数概率——把 chunk 拆成一个个动作 token，再把每个 token 的对数概率加起来。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\mathbf{a}_{t:t+H}$ | **整个动作包裹** | 一次预测的连续 $H$ 步动作打包在一起（action chunk） |
+| $H$ | **包裹大小** | chunk 的长度，比如一次预测未来 4 步动作 |
+| $d$ | **每步动作的零件数** | 每一步动作的维度数，如 7 维（xyz 位移 + 旋转 + 夹爪开合） |
+| $\log\pi_\theta(a_{t+h,i}\|s_t,a_{t:t+h-1})$ | **单个零件的概率** | chunk 内第 $h$ 步、第 $i$ 维动作 token 的对数概率，条件是之前所有已生成的 token |
+| $\sum_{h=0}^{H-1}\sum_{i=1}^d$ | **逐零件累加器** | 先跨每步内的维度求和，再跨 chunk 内的步数求和，把所有 token 的对数概率加总 |
+
+**用人话读**："一个动作 chunk 是好几个时间步、每步好几个维度的 token 拼起来的，把这些 token 各自的对数概率全部加起来，就是整个 chunk 的对数概率。"
+
+**为什么是这个形式**：LLM 每次只生成一个 token、log-prob 只是单个求和；VLA 常常一次预测一个动作 chunk（而不是单步），所以 SimpleVLA-RL 必须把 log-prob 的计算从"单步"扩展成"chunk 内逐步、逐维度"的双重求和，这样才能在 PPO 里正确计算概率比 $r_t(\theta)$。
+:::
 
 ### 2.3 PPO 训练流程
 
@@ -134,13 +191,22 @@ $$
 \mathcal{L}_{\text{PPO}}(\theta) = -\mathbb{E}_t\left[\min\left(r_t(\theta)\hat{A}_t, \; \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t\right)\right] + c_1 \mathcal{L}_{\text{VF}} - c_2 H(\pi_\theta)
 $$
 
-**逐项拆解**：
-- $r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)}$：概率比值
-- $\hat{A}_t$：GAE 计算的 advantage
-- $\text{clip}(\cdot)$：限制更新幅度在 $[1-\epsilon, 1+\epsilon]$
-- $\mathcal{L}_{\text{VF}} = (V_\phi(s_t) - V_t^{\text{target}})^2$：Critic（Value function）的损失
-- $H(\pi_\theta) = -\sum_a \pi_\theta(a|s) \log \pi_\theta(a|s)$：策略熵，鼓励探索
-- $c_1 = 0.5, c_2 = 0.01$：平衡系数
+**这个公式在做什么**：把"策略要往好动作方向更新但不能跨太大步"、"Critic 打分要准"、"策略别太快变得死板"三个目标合并成一个总损失，一次反向传播同时优化（详见 [策略梯度与 PPO](/前置知识/000a_前置知识_策略梯度与PPO)）。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $r_t(\theta)=\frac{\pi_\theta(a_t\|s_t)}{\pi_{\theta_{\text{old}}}(a_t\|s_t)}$ | **策略变化倍数计** | 新策略选这个动作的概率 ÷ 旧策略选它的概率 |
+| $\text{clip}(r_t(\theta),1-\epsilon,1+\epsilon)\hat A_t$ | **安全绳版本** | 把概率比强行卡在 $[1-\epsilon,1+\epsilon]$ 区间内再乘 advantage，防止更新步子太大 |
+| $\min(\cdot,\cdot)$ | **保守裁判** | 在"放开跑"和"卡着安全绳跑"两个版本里取较小的 |
+| $c_1\mathcal{L}_{\text{VF}}=c_1(V_\phi(s_t)-V_t^{\text{target}})^2$ | **Critic 体检分** | Value function 预测值和真实目标值的均方误差，权重 $c_1=0.5$ |
+| $-c_2H(\pi_\theta)$ | **保持随机的奖励** | 策略熵 $H(\pi_\theta)=-\sum_a\pi_\theta(a\|s)\log\pi_\theta(a\|s)$ 取负号鼓励熵变大，权重 $c_2=0.01$，防止过早收敛成死板策略 |
+
+**用人话读**："总损失 = 用安全绳限制过的策略更新目标 + Critic 打分误差（加权）- 策略保持随机性的奖励（加权），一起做梯度下降。"
+
+**为什么是这个形式**：这是标准 PPO 的组合损失，clip 机制防止单次更新步子过大，Critic 损失让 GAE 用到的 $V_\phi$ 越来越准，熵奖励防止策略过早收敛丢失探索能力——三者缺一不可，详细推导见 [策略梯度与 PPO](/前置知识/000a_前置知识_策略梯度与PPO)。
+:::
 
 **代入数字的例子**：
 
@@ -303,13 +369,23 @@ $$
 h_t = \text{VLA}(\text{concat}[\text{SigLIP}(o_t), \text{DINOv2}(o_t), \text{Embed}(\text{instr})])
 $$
 
-**逐项拆解**：
-- $o_t$：当前时间步的 RGB 图像（224×224）
-- $\text{SigLIP}(o_t)$：语义级视觉特征（捕获"是什么"）
-- $\text{DINOv2}(o_t)$：空间级视觉特征（捕获"在哪里"）
-- $\text{Embed}(\text{instr})$：语言指令的 token embedding
-- $\text{concat}[\cdot]$：拼接为统一的输入序列
-- $h_t$：VLA transformer 的隐藏状态输出
+**这个公式在做什么**：把同一帧图像的两种不同视觉特征（语义 + 空间）和语言指令拼在一起，喂给 VLA 的 Transformer，算出当前时刻的隐藏表示。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\text{SigLIP}(o_t)$ | **"这是什么"的眼睛** | 语义级视觉特征提取器，捕获图像里物体的类别/语义信息 |
+| $\text{DINOv2}(o_t)$ | **"在哪里"的眼睛** | 空间级视觉特征提取器，捕获物体的位置、几何结构信息 |
+| $\text{Embed}(\text{instr})$ | **指令翻译官** | 把语言指令转成 token embedding 向量 |
+| $\text{concat}[\cdot]$ | **拼接工** | 把三路特征首尾拼接成一条统一序列 |
+| $\text{VLA}(\cdot)$ | **大脑本体** | VLA 的 Transformer backbone，把拼接后的序列编码成隐藏状态 |
+| $h_t$ | **当前时刻的理解** | Transformer 输出的隐藏状态，后续会被 action head 解码成具体动作 |
+
+**用人话读**："同一帧画面同时用两种视觉网络分别看'是什么'和'在哪里'，再和指令文字拼在一起，一起喂给 VLA 的 Transformer，得到这一时刻的内部表示。"
+
+**为什么用两种视觉编码器而不是一种**：单一视觉编码器往往在"语义理解"和"空间精度"之间有取舍——SigLIP 擅长语义对齐（因为是用图文对比学习训练的），DINOv2 擅长空间/几何特征（因为是自监督在像素级一致性上训练的）。机器人操作既需要"认出物体是什么"也需要"知道它精确在哪里"，所以 SimpleVLA-RL 的 rollout worker 把两路特征都接入模型，而不是只用一种。
+:::
 
 ### 5.2 GAE 在 Action Chunk 上的计算
 
@@ -319,16 +395,41 @@ $$
 \hat{A}_{t:t+H} = \sum_{l=0}^{L}(\gamma\lambda)^l \delta_{t+lH}
 $$
 
+**这个公式在做什么**：把 [GAE](/前置知识/000a_前置知识_策略梯度与PPO) 的优势估计从"逐单步"扩展到"逐 chunk"——每个 chunk 当作一个整体的"宏步骤"，用同样的加权求和方式算优势。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\delta_{t+lH}$ | **第 $l$ 个宏步骤的误差信号** | 第 $l$ 个 chunk 的 TD 残差（下面第二个公式定义），衡量"这个 chunk 实际表现比预期好多少" |
+| $(\gamma\lambda)^l$ | **宏步骤折扣器** | 距离当前越远的未来 chunk，权重按 $(\gamma\lambda)^l$ 指数衰减 |
+| $\sum_{l=0}^{L}$ | **跨 chunk 累加器** | 把当前 chunk 之后所有 chunk 的加权残差累加起来 |
+| $\hat A_{t:t+H}$ | **整个 chunk 的优势分** | 这个动作 chunk 相对平均水平好多少，直接喂给 PPO 损失里的 $\hat A_t$ |
+
+**用人话读**："把整个动作 chunk 当成一步'宏动作'，用和标准 GAE 一样的指数加权方式，把未来每个 chunk 的误差信号累加起来，得到这个 chunk 的优势分。"
+
+**为什么要按 chunk 而不是按单步算 GAE**：标准 GAE 假设策略每步单独决策、每步都有一个 value 估计。但 VLA 一次预测 $H$ 步动作（action chunk），chunk 内部的动作是同一次前向传播生成的，没有必要（也没有信号）在 chunk 内部再算逐步优势——所以 SimpleVLA-RL 把整个 chunk 当作 GAE 递推里的一个"时间步"，$H$ 步一起进退。
+:::
+
 $$
 \delta_{t} = \left(\sum_{h=0}^{H-1} \gamma^h r_{t+h}\right) + \gamma^H V(s_{t+H}) - V(s_t)
 $$
 
-**逐项拆解**：
-- $H$：chunk 长度
-- 内层求和：chunk 内所有步的折扣 reward 总和
-- $\gamma^H V(s_{t+H})$：chunk 结束后下一个状态的 value（经过 $H$ 步折扣）
-- $V(s_t)$：chunk 开始时的 value 估计
-- 这等价于把 $H$ 步"压缩"为一个"宏动作"，在宏动作级别计算 GAE
+**这个公式在做什么**：算出一个 chunk 的 TD（Temporal Difference，时序差分）残差——把 chunk 内实际拿到的奖励加上"chunk 结束后还能拿多少"的预测，减去"chunk 开始前预测能拿多少"，差值就是这个 chunk 带来的意外收益。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\sum_{h=0}^{H-1}\gamma^h r_{t+h}$ | **chunk 内实收** | 这 $H$ 步实际拿到的折扣奖励总和 |
+| $\gamma^H V(s_{t+H})$ | **chunk 后的预期** | chunk 结束时下一个状态的 value 估计，打上 $H$ 步的折扣 |
+| $V(s_t)$ | **chunk 前的预期** | chunk 开始时，Critic 对"接下来能拿多少分"的预测 |
+| $\delta_t$ | **意外收益** | 实际表现（前两项之和）减去开始时的预期，正数=超预期，负数=不如预期 |
+
+**用人话读**："这个 chunk 实际拿到的分加上 chunk 结束后还能预期拿到的分，减去 chunk 开始前 Critic 预测能拿到的分，差值就是这个 chunk 的意外收益。"
+
+**为什么是这个形式**：这是标准 TD 残差 $\delta_t = r_t + \gamma V(s_{t+1}) - V(s_t)$ 在 chunk 级别的直接推广——把单步的 $r_t$ 换成 chunk 内 $H$ 步的折扣奖励总和，把单步的下一状态 value 换成 chunk 结束后的下一状态 value（多打 $H$ 次折扣）。这样就把"$H$ 步压缩成一个宏动作"这件事在数学上落到了实处，能直接喂给上面的 GAE 公式。
+:::
 
 ### 5.3 KL 约束的实现
 
@@ -337,6 +438,23 @@ $$
 $$
 \mathcal{L}_{\text{KL}} = \beta \cdot \mathbb{E}_t\left[D_{\text{KL}}\left(\pi_\theta(\cdot|s_t) \| \pi_{\text{ref}}(\cdot|s_t)\right)\right]
 $$
+
+**这个公式在做什么**：惩罚当前策略偏离 SFT 基线太远——用 KL 散度衡量"新策略和原始 SFT 策略的分布差多少"，乘上一个系数加进总损失里当作约束。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $\pi_\theta(\cdot\|s_t)$ | **当前策略** | RL 训练中正在更新的策略，在状态 $s_t$ 下的动作分布 |
+| $\pi_{\text{ref}}(\cdot\|s_t)$ | **参照基线** | 训练开始前固定住的 SFT 策略，在同一状态下的动作分布 |
+| $D_{\text{KL}}(\pi_\theta\|\pi_{\text{ref}})$ | **偏离尺** | [KL 散度](/前置知识/000j_前置知识_KL散度与策略约束)，衡量两个分布差多少，越大说明当前策略跑得越偏离基线 |
+| $\mathbb{E}_t[\cdot]$ | **批次平均** | 对采样到的一批时间步取平均 |
+| $\beta$ | **约束松紧度旋钮** | 系数越大，惩罚越重，策略被拉得越贴近基线 |
+
+**用人话读**："算出当前策略和原始 SFT 策略在每个状态下的分布差多远，乘上一个系数加进损失里，逼着策略别跑得太远。"
+
+**为什么需要自适应 $\beta$**：如果 $\beta$ 固定不变，训练初期策略可能被约束得太死（学不动），训练后期又可能约束不够（跑飞、遗忘 SFT 学到的基础能力）。SimpleVLA-RL 用自适应机制——实际 KL 超过目标值就增大 $\beta$ 收紧约束，低于目标值就减小 $\beta$ 放松约束，把 KL 稳定控制在目标附近（本文设为 0.05）。
+:::
 
 SimpleVLA-RL 使用自适应 $\beta$：
 - 如果当前 KL > 目标 KL：增大 $\beta$（加强约束）

@@ -124,15 +124,169 @@ html.sidebar-right-collapsed .VPDoc.has-aside .content-container {
   position: relative;
 }
 
+/* 临时关键词快速定位框 */
+.quick-filter-bar {
+  margin-bottom: 20px;
+}
+
+.quick-filter-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.quick-filter-input-wrapper:focus-within {
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 0 0 3px var(--vp-c-brand-soft);
+}
+
+.quick-filter-icon {
+  font-size: 16px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.quick-filter-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--vp-c-text-1);
+}
+
+.quick-filter-input::placeholder {
+  color: var(--vp-c-text-3);
+}
+
+.quick-filter-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--vp-c-text-3);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.quick-filter-clear:hover {
+  background: var(--vp-c-default-soft);
+  color: var(--vp-c-text-1);
+}
+
 /* 分类 Tab 栏 */
 .category-tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   padding: 6px;
   background: var(--vp-c-bg-soft);
   border-radius: 12px;
   overflow-x: auto;
+}
+
+/* 主题速览区（找文章的主入口） */
+.topic-section {
+  padding: 4px 0 20px;
+}
+
+.topic-section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.topic-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+
+.topic-section-desc {
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+}
+
+.topic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .topic-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 960px) {
+  .topic-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.topic-tile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.topic-tile:hover {
+  border-color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+  transform: translateY(-1px);
+}
+
+.topic-tile.active {
+  border-color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-1);
+  color: white;
+  box-shadow: 0 2px 8px rgba(var(--vp-c-brand-1-rgb, 100, 108, 255), 0.3);
+}
+
+.topic-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.topic-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-count {
+  font-size: 11px;
+  opacity: 0.7;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 7px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.topic-tile.active .topic-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.dark .topic-tile.active .topic-count,
+.dark .tag-btn.active .tag-count {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .category-tab {
@@ -687,34 +841,140 @@ mjx-container.math-block-copyable.math-block-copied {
 }
 
 
-/* ===== 全屏阅读模式（隐藏左右侧边栏） ===== */
+/* ===== 全屏阅读模式（顶栏 + 左右侧边栏默认隐藏，鼠标移到边缘才浮出） =====
+ * 整体思路：
+ * 1. 顶栏 / 左侧栏 / 右侧栏本身都已经是 position: fixed（或在全屏模式下
+ *    被强制设为 fixed），所以让它们隐藏或出现都不影响正文布局——正文始终
+ *    按"没有顶栏、没有侧边栏"计算宽度，隐藏/浮出只是在正文上方叠一层浮层。
+ * 2. 隐藏用 transform + opacity，而不是 display:none，这样才有滑入滑出的
+ *    过渡动画；同时 pointer-events:none 保证隐藏时不会挡住正文的点击/选中。
+ * 3. 浮出的触发由 useFocusHoverReveal.ts 里的 JS 完成：一是在屏幕四边贴了
+ *    几条几乎不可见的感应条（.focus-hover-zone-*），鼠标进入就浮出；二是
+ *    鼠标移到面板本身上时也保持浮出，移出后延迟隐藏，避免抖动闪烁。
+ * 4. html.focus-reveal-top / -left / -right 这几个 class 就是 JS 加上去的
+ *    "当前应该浮出"标记，纯 CSS 负责根据这些 class 做显示/隐藏的样式切换。
+ */
 
-/* 把侧边栏宽度变量归零，导航栏 / 内容区的 padding 计算会自动跟着归零 */
+/* 把侧边栏宽度变量归零，正文的 padding 计算会自动跟着归零 */
 .focus-mode {
   --vp-sidebar-width: 0px;
 }
 
-.focus-mode .VPSidebar,
+/* ---- 顶栏：默认滑出视野，hover 顶部边缘时滑入 ---- */
+.focus-mode .VPNav {
+  position: fixed !important;
+  top: 0 !important;
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  box-shadow: none;
+}
+
+html.focus-reveal-top .focus-mode .VPNav,
+.focus-mode.focus-reveal-top .VPNav {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  box-shadow: var(--vp-shadow-2);
+}
+
+/* 移动端下方的二级导航条（大纲/菜单），跟顶栏共用同一套浮出逻辑 */
 .focus-mode .VPLocalNav {
-  display: none !important;
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.25s ease, opacity 0.25s ease;
 }
 
+html.focus-reveal-top .focus-mode .VPLocalNav,
+.focus-mode.focus-reveal-top .VPLocalNav {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---- 左侧栏：默认滑出视野，hover 左边缘或侧栏本身时滑入 ---- */
+.focus-mode .VPSidebar {
+  top: 0 !important;
+  padding-top: 16px !important;
+  transform: translateX(-100%) !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  box-shadow: none !important;
+  z-index: var(--vp-z-index-sidebar);
+}
+
+html.focus-reveal-left .focus-mode .VPSidebar,
+.focus-mode.focus-reveal-left .VPSidebar {
+  transform: translateX(0) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  box-shadow: var(--vp-shadow-3) !important;
+}
+
+/* ---- 右侧栏（大纲 aside）：脱离文档流变成浮层，默认滑出，hover 右边缘时滑入 ----
+ * 加 html.sidebar-right-collapsed 前缀是为了盖掉"手动折叠右侧栏"那条规则
+ * （display:none !important，选择器带 html 元素，特异性更高）。全屏模式是
+ * 独立的沉浸式状态，进入后右侧栏统一交给 hover 逻辑管理，不受手动折叠状态影响。
+ */
+html.sidebar-right-collapsed.focus-mode .VPDoc .aside,
 .focus-mode .VPDoc .aside {
-  display: none !important;
+  display: block !important;
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 280px !important;
+  max-width: 280px !important;
+  margin: 0 !important;
+  padding: 24px 20px !important;
+  background: var(--vp-c-bg) !important;
+  overflow-y: auto !important;
+  transform: translateX(100%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.25s ease, opacity 0.25s ease, visibility 0.25s;
+  z-index: var(--vp-z-index-sidebar);
+  box-shadow: none;
 }
 
-/* 核心修复：逐层覆盖 VitePress scoped CSS 的宽度限制 */
+.focus-mode .VPDoc .aside .aside-container,
+.focus-mode .VPDoc .aside .aside-curtain {
+  position: static !important;
+  width: 100% !important;
+  height: auto !important;
+  padding-top: 0 !important;
+}
 
-/* Layer 1: VPContent — 去掉为 sidebar 预留的 padding */
+html.focus-reveal-right .focus-mode .VPDoc .aside,
+.focus-mode.focus-reveal-right .VPDoc .aside {
+  transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  box-shadow: var(--vp-shadow-3);
+}
+
+/* 核心修复：逐层覆盖 VitePress scoped CSS 的宽度限制，让正文始终按"无侧栏"计算 */
+
+/* Layer 1: VPContent — 去掉为顶栏 / sidebar 预留的 padding */
+.focus-mode .VPContent {
+  padding-top: 0 !important;
+}
+
 .focus-mode .VPContent.has-sidebar {
   padding-left: 0 !important;
   padding-right: 0 !important;
-  margin: var(--vp-layout-top-height, 0px) auto 0 !important;
+  margin: 0 auto !important;
 }
 
 /* Layer 2: VPDoc 自身的 padding */
 .focus-mode .VPDoc {
-  padding: 48px 0 0 !important;
+  padding: 24px 0 0 !important;
 }
 
 /* Layer 3: .container — 不限宽，居中 */
@@ -736,6 +996,68 @@ mjx-container.math-block-copyable.math-block-copied {
   max-width: min(1400px, 92%) !important;
   margin: 0 auto !important;
   padding: 0 64px 128px !important;
+}
+
+/* 全屏模式下阅读进度条要贴到最顶（原本是紧贴导航栏下方） */
+.focus-mode .progress-bar-container {
+  top: 0 !important;
+}
+
+/* JS 注入的四边感应条：几乎不可见，只用来捕获鼠标移入事件 */
+.focus-hover-zone {
+  position: fixed;
+  z-index: 95;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.focus-hover-zone-top {
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 10px;
+}
+
+.focus-hover-zone-left {
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 100%;
+}
+
+.focus-hover-zone-right {
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 100%;
+}
+
+@media (max-width: 1279px) {
+  /* 右侧大纲栏本来就只在宽屏显示，窄屏不需要感应条 */
+  .focus-hover-zone-right {
+    display: none;
+  }
+}
+
+@media (max-width: 959px) {
+  /* 左侧栏在窄屏本来就是抽屉式弹出，不需要额外的边缘感应条 */
+  .focus-hover-zone-left {
+    display: none;
+  }
+}
+
+/* 全屏阅读模式下，侧边栏原有的手动展开/收起按钮完全交给鼠标 hover 边缘
+   触发的浮出逻辑处理，这几个按钮容易和浮出的侧边栏叠在一起，直接隐藏掉。
+   注意：这条规则必须写在全局 CSS 里，不能写成 SidebarToggle.vue 的
+   scoped style 用 :global() 包裹——Vue 的 scoped 编译器会把
+   ":global(.focus-mode) .sidebar-expand-btn" 里的 .focus-mode 和
+   .sidebar-expand-btn 都各自加上 data-v-xxx 属性选择器（scoped 编译对
+   :global() 内部选择器的处理和预期不一致），错误编译成
+   ".focus-mode,.focus-mode { display:none }"，等价于直接隐藏了整个
+   <html class="focus-mode">，导致开启全屏阅读后页面完全变空白。 */
+.focus-mode .sidebar-expand-btn,
+.focus-mode .sidebar-collapse-right-btn {
+  display: none !important;
 }
 
 
@@ -914,7 +1236,14 @@ html.sidebar-resizing .VPSidebar {
  * 触发）。
  */
 mjx-container {
-  overflow: visible !important;
+  /* 注意：不能用 overflow: visible !important 这个简写——它会同时
+     覆盖 overflow-x 和 overflow-y，把 VitePress 默认的
+     overflow-x: auto（超宽公式横向滚动兜底）也一并冲掉，导致超宽
+     公式（本站大量使用的 \underbrace 路线图、多项 loss 等）直接溢出
+     文章正文区域，而不是出现横向滚动条。只显式声明 overflow-y，
+     横向滚动交给 base.css 里的默认值。 */
+  overflow-x: auto !important;
+  overflow-y: visible !important;
   /* 用 SVG 自带的 width/height 直接确定占位大小，禁止再被内容撑开
      或被外部样式动态改写，从源头保证"渲染完成后不再变化尺寸"。 */
   contain: layout;

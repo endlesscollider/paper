@@ -96,7 +96,22 @@ $$
 L(\theta) = \mathbb{E}_{(s_t, \mathbf{a}_{t:t+h}, r_t^h, s_{t+h}) \sim \mathcal{D}}\left[\Big(Q_\theta(s_t, \mathbf{a}_{t:t+h}) - r_t^h - \gamma^h Q_{\bar\theta}(s_{t+h}, \mathbf{a}^\star_{t+h})\Big)^2\right]
 $$
 
-这里 $\mathbf{a}^\star_{t+h}$ 是在 $s_{t+h}$ 处从 VLA 采样 $N$ 个候选块后用 Critic 挑出的最优块。公式的含义和 [Q-Chunking 精读第 4.2.4 节](./071_QChunking_RL与动作分块#4.2.4-qc-的完整-td-loss) 完全一致，不再重复。
+**这个公式在做什么**：训练分块 Critic $Q_\theta$，让它对"当前状态 + 未来一整个动作块"的打分，逐渐逼近"这个块能拿到的真实奖励 + 未来价值的折扣估计"——本质是标准 TD 学习，只是把单步动作换成了一整个动作块。
+
+::: details 📐 公式详解（点击展开）
+
+| 子表达式 | 它是谁 | 它在干嘛 |
+|---------|--------|---------|
+| $Q_\theta(s_t, \mathbf{a}_{t:t+h})$ | **当前的打分猜测** | Critic 网络对"从 $s_t$ 出发、执行整个动作块 $\mathbf{a}_{t:t+h}$"给出的价值估计 |
+| $r_t^h$ | **这一块拿到的真实奖励** | 执行完整个动作块（$h$ 步）后实际累积的（折扣）奖励 |
+| $\gamma^h Q_{\bar\theta}(s_{t+h}, \mathbf{a}^\star_{t+h})$ | **未来价值的估计（目标网络给出）** | 用目标网络 $Q_{\bar\theta}$（缓慢更新的旧 Critic）估计走到 $s_{t+h}$ 之后、执行最优候选块 $\mathbf{a}^\star_{t+h}$ 能拿到的价值，再打 $h$ 步的折扣。$\mathbf{a}^\star_{t+h}$ 是在 $s_{t+h}$ 处从 VLA 采样 $N$ 个候选块后用 Critic 挑出的最优块 |
+| $Q_\theta(\cdot)-r_t^h-\gamma^h Q_{\bar\theta}(\cdot)$ | **打分误差（TD 残差）** | "当前猜测"和"真实奖励 + 未来估计"之间差多少 |
+| $\mathbb{E}_{(\cdot)\sim\mathcal D}[(\cdot)^2]$ | **在离线数据集上取平均** | 从离线数据集 $\mathcal D$ 里采样一批 $(s_t,\mathbf a_{t:t+h},r_t^h,s_{t+h})$，把误差平方后取平均，就是训练 Critic 的 loss |
+
+**用人话读**："让 Critic 对整个动作块的打分，尽量接近'这个块实际拿到的奖励 + 走到块末尾之后，用旧 Critic 估计出的未来价值打折后的和'。"
+
+**为什么是这个形式**：这是标准 TD 学习的分块版本——把单步的 $(s,a,r,s')$ 换成跨越 $h$ 步的 $(s_t,\mathbf a_{t:t+h},r_t^h,s_{t+h})$，价值信号一次 backup 就能跨越整个动作块，传播速度比单步 TD 快 $h$ 倍（详见 3.1 节离线稀疏奖励的讨论）。$\mathbf{a}^\star_{t+h}$ 的挑选方式和目标网络 $Q_{\bar\theta}$ 的具体推导完全沿用 [Q-Chunking 精读第 4.2.4 节](./071_QChunking_RL与动作分块#4.2.4-qc-的完整-td-loss)，不再重复。
+:::
 
 **VLA 特有的一个关键区别**：Q-Chunking 原文的 $f_\xi$ 是一个从零训练的小型 Flow 网络（几百万参数），采样速度快。但 VLA 模型（如 π₀）有几十亿参数，每次采样一个动作块需要几百毫秒的推理。$N = 32$ 意味着 32 次完整 VLA 推理——这在训练循环中代价极高。
 
