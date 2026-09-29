@@ -141,7 +141,9 @@ $$
 
 下面的组件展示 3 个不同深度、不同透明度的高斯覆盖同一个像素时，颜色是怎么一层层合成出来的。运行后可以在输出面板里看到每一层的 $\alpha_i, T_i$, 贡献值的具体数字，和动画里从远到近依次"叠色"的过程对应起来看：
 
-<GaussianSplatPlayground preset="alpha-blending-layers" title="Alpha blending：逐层累积透过率与颜色合成" />
+<ClientOnly>
+  <GaussianSplatPlayground preset="alpha-blending-layers" title="Alpha blending：逐层累积透过率与颜色合成" />
+</ClientOnly>
 
 **观察要点**：如果某一层的 $\alpha_i$ 很接近 1（几乎完全不透明），它后面（更靠近观察者）传递下去的累积透过率会骤降到接近 0——这意味着排在它更近的那些层几乎不会再对最终颜色产生任何影响。这正是第 8 章末尾提到的"提前终止"优化的数学依据：一旦某个像素的累积不透明度 $(1-T_i)$ 已经非常接近 1（比如超过 0.9999），后面排在更近处的高斯理论上贡献极小，实现里可以直接跳过，不需要真的算到最后一层。
 

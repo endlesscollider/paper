@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "docs:dev": "NODE_OPTIONS=--max-old-space-size=8192 vitepress dev",
+    "docs:dev": "NODE_OPTIONS=--max-old-space-size=8192 vitepress dev --host",
     "docs:build": "NODE_OPTIONS=--max-old-space-size=16384 vitepress build",
     "docs:preview": "vitepress preview",
     "test:physics-playground": "playwright test tests/physics-playground.spec.mjs --reporter=line"

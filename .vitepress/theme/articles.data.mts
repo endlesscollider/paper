@@ -28,6 +28,7 @@ const SCAN_DIRS = [
   { dir: '工程项目', base: '/工程项目' },
   { dir: '前置知识', base: '/前置知识' },
   { dir: '硬件基础', base: '/硬件基础' },
+  { dir: '数据集', base: '/数据集' },
   { dir: '系列', base: '/系列', indexOnly: true }, // 系列目录只取各系列的 index.md
 ]
 

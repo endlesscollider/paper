@@ -99,7 +99,9 @@ flowchart LR
 
 下面这个示例模拟一个简化的屏幕（划分成若干 tile 网格），随着一个高斯椭圆的位置和大小变化，展示它的包围盒覆盖了哪些 tile。运行后拖动代码里的 `center_x, center_y, radius` 观察包围盒和被标记的 tile 范围如何变化：
 
-<GaussianSplatPlayground preset="tile-assignment" title="tile 分配：椭圆包围盒覆盖了哪些 tile" />
+<ClientOnly>
+  <GaussianSplatPlayground preset="tile-assignment" title="tile 分配：椭圆包围盒覆盖了哪些 tile" />
+</ClientOnly>
 
 **观察要点**：椭圆越大或越靠近 tile 边界，被标记为"相关"的 tile 数量越多——这直接对应第二节说的 duplicate 步骤会为这个高斯生成更多条记录。如果场景里有很多这种"跨越多个 tile 的大高斯"，duplicate 后的记录总数可能远超高斯本身的数量，这是 tile-based 方法在高斯尺度差异很大的场景下需要权衡的一个实际开销。
 

@@ -35,6 +35,11 @@ features:
     details: ACT Decoder 架构、双臂协调训练、MiGenRL RL 微调实现 — 代码级深度剖析
     link: /工程实践/
     linkText: 查看全部 →
+  - icon: 🗂️
+    title: 数据集
+    details: PartNet、PartNet-Mobility、GAPartNet、OmniObject3D、3D-OVS — 3D 部件分割与高斯泼溅评测常用数据集汇总
+    link: /数据集/
+    linkText: 查看全部 →
   - icon: 🧠
     title: Transformer → VLA 教程
     details: 从 Attention 手算到 ACT/VLA 机器人策略，零基础友好的完整学习路径

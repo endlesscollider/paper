@@ -9,13 +9,14 @@ import FocusModeToggle from './components/FocusModeToggle.vue'
 import RefPanel from './components/RefPanel.vue'
 import SidebarToggle from './components/SidebarToggle.vue'
 import PrereqSearch from './components/PrereqSearch.vue'
-import PhysicsPlayground from './components/PhysicsPlayground.vue'
-import GaussianCovariancePlayground from './components/GaussianCovariancePlayground.vue'
-import GaussianCovariance1DPlayground from './components/GaussianCovariance1DPlayground.vue'
-import GaussianCovariance2DPlayground from './components/GaussianCovariance2DPlayground.vue'
-import GaussianSplatPlayground from './components/GaussianSplatPlayground.vue'
 import './custom.css'
-import { h, onMounted, onUnmounted } from 'vue'
+import { defineAsyncComponent, h, onMounted, onUnmounted } from 'vue'
+
+const PhysicsPlayground = defineAsyncComponent(() => import('./components/PhysicsPlayground.vue'))
+const GaussianCovariancePlayground = defineAsyncComponent(() => import('./components/GaussianCovariancePlayground.vue'))
+const GaussianCovariance1DPlayground = defineAsyncComponent(() => import('./components/GaussianCovariance1DPlayground.vue'))
+const GaussianCovariance2DPlayground = defineAsyncComponent(() => import('./components/GaussianCovariance2DPlayground.vue'))
+const GaussianSplatPlayground = defineAsyncComponent(() => import('./components/GaussianSplatPlayground.vue'))
 import { setupMathCopy } from './composables/useMathCopy'
 import { setupMermaidZoom } from './composables/useMermaidZoom'
 import { setupImageZoom } from './composables/useImageZoom'
@@ -42,7 +43,7 @@ export default {
       router.onAfterRouteChanged = () => {
         setupMathCopy()
       }
-      // “分栏引用”功能的核心拦截点：见 useRefPanel.ts 顶部注释
+      // "分栏引用"功能的核心拦截点：见 useRefPanel.ts 顶部注释
       const prevBefore = router.onBeforeRouteChange
       router.onBeforeRouteChange = async (to: string) => {
         const result = handleBeforeRouteChange(to)
