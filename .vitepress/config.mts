@@ -364,6 +364,7 @@ export default withMermaid(defineConfig({
   description: '从 Transformer 到 ACT/VLA，从行为克隆到 RL 微调',
   lang: 'zh-CN',
   base: process.env.GITHUB_ACTIONS ? '/paper/' : '/',
+  cleanUrls: true,
 
   themeConfig: {
     nav: [
@@ -383,6 +384,7 @@ export default withMermaid(defineConfig({
           { text: '工程项目', link: '/工程项目/' },
         ]
       },
+      { text: '数据集', link: '/数据集/' },
       { text: '系列文章', link: '/系列/' },
       { text: '硬件基础', link: '/硬件基础/' },
       { text: '每日快报', link: '/每日快报/' },
@@ -392,6 +394,8 @@ export default withMermaid(defineConfig({
     sidebar: {
       '/前置知识/': scanSidebar('前置知识', '/前置知识'),
       '/硬件基础/': scanSidebar('硬件基础', '/硬件基础'),
+      // 数据集
+      ...scanArticleSidebar('数据集', '/数据集'),
       // 论文综述、工程实践、工程项目：每篇文章 sidebar 只显示知识链接
       ...scanArticleSidebar('论文综述', '/论文综述'),
       ...scanArticleSidebar('工程实践', '/工程实践'),
@@ -517,8 +521,11 @@ export default withMermaid(defineConfig({
   },
 
   vite: {
+    optimizeDeps: {
+      include: ['mermaid'],
+    },
     plugins: [
-      // “分栏引用”功能 dev 模式下的即时渲染中间件，
+      // "分栏引用"功能 dev 模式下的即时渲染中间件，
       // 详见 .vitepress/refSectionsPlugin.mts 顶部注释。
       refSectionsPlugin({
         srcDir: path.resolve(__dirname, '..'),
