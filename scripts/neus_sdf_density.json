@@ -1,0 +1,67 @@
+{
+  "output": "public/neus_sdf_vs_density.png",
+  "title": "SDF Value and Opacity Along a Ray (NeuS vs NeRF)",
+  "xlabel": "Position along ray (t)",
+  "ylabel": "Value",
+  "xlim": [-3, 3],
+  "ylim": [-0.2, 1.3],
+  "figsize": [11, 5],
+  "nrows": 1,
+  "ncols": 2,
+  "subplots": [
+    {
+      "title": "SDF: signed distance to surface",
+      "xlabel": "Position along ray (t)",
+      "ylabel": "SDF(t)",
+      "xlim": [-3, 3],
+      "ylim": [-1.6, 1.6],
+      "grid": true,
+      "curves": [
+        {
+          "expr": "x",
+          "x_range": [-3, 3, 400],
+          "label": "SDF(t) = t  (surface at t=0)",
+          "color": "#2196F3",
+          "linewidth": 2.5
+        }
+      ],
+      "reference_lines": [
+        { "y": 0, "color": "#607D8B", "linewidth": 1.2, "linestyle": "--", "label": "surface (SDF=0)" }
+      ],
+      "annotations": [
+        { "x": 1.5, "y": 1.1, "text": "outside\n(SDF > 0)", "fontsize": 10, "color": "#4CAF50" },
+        { "x": -1.8, "y": -1.1, "text": "inside\n(SDF < 0)", "fontsize": 10, "color": "#F44336" }
+      ],
+      "legend_loc": "upper left"
+    },
+    {
+      "title": "Opacity along ray: NeuS vs naive sigmoid",
+      "xlabel": "Position along ray (t)",
+      "ylabel": "Opacity σ(t)",
+      "xlim": [-3, 3],
+      "ylim": [-0.05, 0.7],
+      "grid": true,
+      "curves": [
+        {
+          "expr": "np.exp(-x**2 / (2 * 0.3**2)) / (np.sqrt(2 * np.pi) * 0.3) * 0.6",
+          "x_range": [-3, 3, 400],
+          "label": "NeuS: peak exactly at SDF=0",
+          "color": "#2196F3",
+          "linewidth": 2.5
+        },
+        {
+          "expr": "1 / (1 + np.exp(x * 3)) * 0.55",
+          "x_range": [-3, 3, 400],
+          "label": "Naive sigmoid: peak shifted inward",
+          "color": "#FF9800",
+          "linewidth": 2.0,
+          "linestyle": "--"
+        }
+      ],
+      "reference_lines": [
+        { "x": 0, "color": "#607D8B", "linewidth": 1.2, "linestyle": "--", "label": "surface (t=0)" }
+      ],
+      "legend_loc": "upper right"
+    }
+  ]
+}
