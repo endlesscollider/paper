@@ -26,6 +26,11 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: .vitepress/cache
+          key: vitepress-${{ hashFiles('**/*.md', '.vitepress/config.mts', 'package-lock.json') }}
+          restore-keys: vitepress-
       - run: npm run docs:build
       - uses: actions/upload-pages-artifact@v3
         with:
