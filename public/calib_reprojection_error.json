@@ -1,0 +1,45 @@
+{
+  "output": "public/calib_reprojection_error.png",
+  "title": "Reprojection Error: Observed vs Projected Pixel",
+  "xlabel": "u (pixel)",
+  "ylabel": "v (pixel)",
+  "xlim": [-1.5, 1.5],
+  "ylim": [-1.5, 1.5],
+  "figsize": [6, 6],
+  "dpi": 150,
+  "grid": true,
+  "curves": [],
+  "points": [
+    {
+      "x": 0.0,
+      "y": 0.0,
+      "label": "projected $\\hat{p}$",
+      "color": "#2196F3",
+      "marker": "o",
+      "markersize": 10,
+      "text_offset": [0.08, 0.08]
+    },
+    {
+      "x": 0.45,
+      "y": -0.35,
+      "label": "observed $p$",
+      "color": "#F44336",
+      "marker": "x",
+      "markersize": 12,
+      "text_offset": [0.08, -0.15]
+    }
+  ],
+  "annotations": [
+    {
+      "x": 0.22,
+      "y": -0.17,
+      "text": "reprojection\nerror $e$",
+      "color": "#FF9800",
+      "fontsize": 11
+    }
+  ],
+  "reference_lines": [
+    {"x": 0, "color": "#607D8B", "linewidth": 0.8, "linestyle": "--"},
+    {"y": 0, "color": "#607D8B", "linewidth": 0.8, "linestyle": "--"}
+  ]
+}
