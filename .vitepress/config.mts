@@ -524,6 +524,18 @@ export default withMermaid(defineConfig({
     optimizeDeps: {
       include: ['mermaid'],
     },
+    build: {
+      chunkSizeWarningLimit: 2000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/monaco-editor')) return 'monaco-editor'
+            if (id.includes('node_modules/three')) return 'three'
+            if (id.includes('node_modules/mermaid')) return 'mermaid'
+          }
+        }
+      }
+    },
     plugins: [
       // "分栏引用"功能 dev 模式下的即时渲染中间件，
       // 详见 .vitepress/refSectionsPlugin.mts 顶部注释。
