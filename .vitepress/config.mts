@@ -5,6 +5,67 @@ import path from 'node:path'
 import matter from 'gray-matter'
 import { refSectionsPlugin, generateRefSections } from './refSectionsPlugin.mts'
 
+// --- Sidebar 缓存（本地开发加速）---
+// 原理：每次启动只用 statSync 检查 mtime/size，生成 fingerprint。
+// fingerprint 不变则直接读 JSON 缓存，不重新解析任何 .md 文件。
+// fingerprint 变了（新增/修改文章）才对该目录重新扫描，其余目录仍走缓存。
+
+const SIDEBAR_CACHE_FILE = path.resolve(__dirname, 'cache', 'sidebar-cache.json')
+
+interface _CacheEntry { fingerprint: string; data: unknown }
+let _sidebarCache: Record<string, _CacheEntry> = {}
+let _sidebarCacheDirty = false
+
+function _loadSidebarCache(): void {
+  try {
+    if (fs.existsSync(SIDEBAR_CACHE_FILE))
+      _sidebarCache = JSON.parse(fs.readFileSync(SIDEBAR_CACHE_FILE, 'utf-8'))
+  } catch { _sidebarCache = {} }
+}
+
+function _saveSidebarCache(): void {
+  if (!_sidebarCacheDirty) return
+  try {
+    const dir = path.dirname(SIDEBAR_CACHE_FILE)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(SIDEBAR_CACHE_FILE, JSON.stringify(_sidebarCache))
+  } catch {}
+}
+
+/** stat-only walk：只看文件路径/mtime/size，不读内容，速度比 readFileSync 快 10–20x */
+function _fingerprint(dir: string): string {
+  const root = path.resolve(__dirname, '..', dir)
+  if (!fs.existsSync(root)) return ''
+  const parts: string[] = []
+  function walk(d: string, depth: number) {
+    if (depth > 3) return
+    let entries: string[]
+    try { entries = fs.readdirSync(d).sort() } catch { return }
+    for (const e of entries) {
+      const p = path.join(d, e)
+      let s: fs.Stats
+      try { s = fs.statSync(p) } catch { continue }
+      if (s.isDirectory()) { parts.push(`D:${e}`); walk(p, depth + 1) }
+      else if (e.endsWith('.md')) parts.push(`F:${e}:${s.mtimeMs}:${s.size}`)
+    }
+  }
+  walk(root, 0)
+  return parts.join('|')
+}
+
+function _cachedSidebar<T>(key: string, dir: string, compute: () => T): T {
+  const fp = _fingerprint(dir)
+  const hit = _sidebarCache[key]
+  if (hit && hit.fingerprint === fp) return hit.data as T
+  const data = compute()
+  _sidebarCache[key] = { fingerprint: fp, data }
+  _sidebarCacheDirty = true
+  return data
+}
+
+_loadSidebarCache()
+process.on('exit', _saveSidebarCache)
+
 // --- 自动 sidebar 生成 ---
 
 interface SidebarItem {
@@ -392,21 +453,21 @@ export default withMermaid(defineConfig({
     ],
 
     sidebar: {
-      '/前置知识/': scanSidebar('前置知识', '/前置知识'),
-      '/硬件基础/': scanSidebar('硬件基础', '/硬件基础'),
+      '/前置知识/': _cachedSidebar('前置知识', '前置知识', () => scanSidebar('前置知识', '/前置知识')),
+      '/硬件基础/': _cachedSidebar('硬件基础', '硬件基础', () => scanSidebar('硬件基础', '/硬件基础')),
       // 数据集
-      ...scanArticleSidebar('数据集', '/数据集'),
+      ..._cachedSidebar('数据集', '数据集', () => scanArticleSidebar('数据集', '/数据集')),
       // 论文综述、工程实践、工程项目：每篇文章 sidebar 只显示知识链接
-      ...scanArticleSidebar('论文综述', '/论文综述'),
-      ...scanArticleSidebar('工程实践', '/工程实践'),
-      ...scanArticleSidebar('工程项目', '/工程项目'),
-      ...scanArticleSidebar('每日快报', '/每日快报'),
+      ..._cachedSidebar('论文综述', '论文综述', () => scanArticleSidebar('论文综述', '/论文综述')),
+      ..._cachedSidebar('工程实践', '工程实践', () => scanArticleSidebar('工程实践', '/工程实践')),
+      ..._cachedSidebar('工程项目', '工程项目', () => scanArticleSidebar('工程项目', '/工程项目')),
+      ..._cachedSidebar('每日快报', '每日快报', () => scanArticleSidebar('每日快报', '/每日快报')),
       // 系列文章：sidebar 显示系列章节目录
       // 注意：系列子目录的 key（如 /系列/xxx/）必须在 '/系列/' 之前展开，
       // 否则 VitePress 的 startsWith 最长前缀匹配会优先命中子目录 key
-      ...scanSeriesSidebar(),
+      ..._cachedSidebar('系列', '系列', () => scanSeriesSidebar()),
       // 系列总索引页的 sidebar
-      '/系列/': scanSeriesIndexSidebar(),
+      '/系列/': _cachedSidebar('系列-index', '系列', () => scanSeriesIndexSidebar()),
 
       '/transformer_vla_tutorial/': [
         {

@@ -6,7 +6,7 @@ category: 系列
 star: 5
 series:
   id: trellis_deep_dive
-  totalChapters: 7
+  totalChapters: 8
   dir: /系列/trellis_deep_dive
 ---
 
@@ -39,6 +39,7 @@ TRELLIS 是微软研究院发布的大规模三维资产生成模型，核心贡
 **前置知识**：
 - [3D Gaussian Splatting：用一堆椭球把真实场景搬进电脑](/前置知识/007a_前置知识_3D_Gaussian_Splatting三维场景重建) — 理解高斯解码头的输出格式
 - [Flow Matching 与连续归一化流](/前置知识/000g_前置知识_Flow_Matching与连续归一化流) — 理解 Rectified Flow 生成过程
+- [DINOv2：无需标签训练出来的空间敏感视觉特征提取器](/前置知识/013b_前置知识_DINOv2视觉特征提取器) — 理解图像条件如何编码成 patch token
 
 ## 章节目录
 
@@ -54,4 +55,5 @@ TRELLIS 是微软研究院发布的大规模三维资产生成模型，核心贡
 | 05 | [三种解码头：高斯、网格、辐射场的输出机制](./05_三种解码头_高斯网格辐射场) | 每个解码头的结构、输出参数、为什么同一 SLAT 能解出三种格式 |
 | **第四部分：图像条件与完整流水线** | | |
 | 06 | [图像条件注入：DINOv2 特征如何驱动生成](./06_DINOv2图像条件注入) | 图像预处理、DINOv2 编码、patch token 如何进入 cross-attention |
-| 07 | [完整 Pipeline：从一张图到 GLB 文件的每一步](./07_完整Pipeline走读与参数调优) | `run()` 方法完整走读、采样参数调优、多图条件与变体生成 |
+| 07 | [完整 Pipeline：从一张图到 GLB 文件的每一步](./07_完整Pipeline走读与参数调优) | `run()` 方法完整走读、采样参数调优、变体生成 |
+| 08 | [多图像条件：stochastic 与 multidiffusion 采样策略](./08_多图像条件_stochastic与multidiffusion采样策略) | 多视角条件的组织方式、采样器注入机制、两种融合策略的机制与权衡 |

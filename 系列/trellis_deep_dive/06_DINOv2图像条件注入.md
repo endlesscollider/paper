@@ -14,7 +14,9 @@ category: 系列
 
 ## 从照片到条件向量
 
-TRELLIS 用 DINOv2 提取图像特征，而不是 CLIP 或 SigLIP。这个选择有理由：DINOv2 是纯视觉自监督模型，patch token 携带大量空间结构信息（哪里有边缘、哪里有纹理、对象的部位在哪里），而不只是语义类别。对于三维重建任务，空间结构比类别更重要——模型需要知道物体的轮廓、曲面、材质细节，而不只是"这是一把椅子"。
+TRELLIS 用 [DINOv2](/前置知识/013b_前置知识_DINOv2视觉特征提取器) 提取图像特征，而不是 CLIP 或 SigLIP。DINOv2 是 Meta 用自监督方法训练的 Vision Transformer（ViT）——它把图像切成 14×14 的小块（patch），每块输出一个向量，这些向量不只记录"这是什么物体"，还记录"这一块在图里长什么样、和周围是什么关系"。不了解 DINOv2 的读者可以先读前置知识文章，再回来看这里的条件注入机制。
+
+这个选择有理由：对于三维重建任务，空间结构比类别更重要——模型需要知道物体的轮廓、曲面、材质细节，而不只是"这是一把椅子"。DINOv2 的 patch token 携带完整的空间位置信息（左上角的 patch 描述左上角，右下角描述右下角），CLIP 的全局 `[CLS]` token 把整张图压缩成一个向量，空间细节基本丢失。
 
 图像处理流程：
 
@@ -97,14 +99,8 @@ slat = self.slat_sampler.sample(
 
 ## 多图像输入
 
-TRELLIS 支持多张图像作为条件，在 pipeline 里通过简单的 token 拼接实现：
+TRELLIS 支持多张视角图像作为条件。`encode_image()` 接受一个 PIL 列表，把所有图像堆叠成一个 batch 交给 DINOv2，输出 `(N, 1369, 1024)`——N 张图，每张图各自保留完整的 1369 个 patch token，它们是并列的 batch 维度，不是拼接成一条长序列。
 
-```python
-# 多图像：把多张图像的 patch token 拼接在一起
-cond_list = [self.encode_image(img) for img in images]
-cond = torch.cat(cond_list, dim=1)   # (B, n_imgs × 1369, 1024)
-```
-
-Cross-attention 的 KV 维度随图像数量线性增长，模型不需要任何特殊修改就能处理多视角输入。多图像输入通常能显著改善被遮挡区域（单张图看不到的背面）的生成质量。
+多图如何在采样过程中实际发挥作用，是一个独立的机制，涉及采样器注入和两种融合策略（stochastic / multidiffusion）——第八章专门讲这部分。
 
 下一章是完整 pipeline 的代码走读和参数调优指南。

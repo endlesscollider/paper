@@ -53,11 +53,7 @@ neg_cond = torch.zeros_like(cond)  # CFG 用的空条件
 
 这一步没有用户可调参数。`neg_cond` 是全零张量，对应"无图像条件"，用于 CFG 的对比采样。
 
-多图像输入在这里扩展：把多张图像的 patch token 拼接：
-
-```python
-cond = pipeline.encode_image(images)  # 传 list[Image]，自动拼接
-```
+多图像输入在这里扩展：把多张图像组成一个 batch 传入，`encode_image()` 输出 `(N, 1369, 1024)`，后续采样器通过注入机制逐步利用各视角条件（见第八章）。
 
 ## 阶段 3：第一阶段采样（稀疏结构）
 
@@ -156,7 +152,7 @@ outputs = pipeline.run(
 | 纹理过饱和/失真 | 降低 `slat_cfg_strength`（3.0 → 2.0） |
 | 形状细节不够 | 增加 `steps`（12 → 25），效果有限 |
 | GLB 文件过大 | 提高 `simplify`（0.95 → 0.98），降低 `texture_size`（1024 → 512） |
-| 背面/遮挡区域质量差 | 增加输入视角（多图像输入） |
+| 背面/遮挡区域质量差 | 增加输入视角（多图像输入，见第八章） |
 | 每次结果不一样 | 固定 `seed` 值 |
 
 ## 完整调用示例
@@ -189,4 +185,4 @@ glb = postprocessing_utils.to_glb(
 glb.export("output.glb")
 ```
 
-这七章覆盖了 TRELLIS 从表示设计到推理参数的完整链路。如果想深入某个组件——比如 Rectified Flow 的训练细节、SLAT VAE 的损失函数设计，或者稀疏算子的实现——可以从各章末尾的链接跳入相关前置知识文章。
+本章覆盖了单图推理的完整链路。多图像条件（stochastic / multidiffusion 两种采样策略）在第八章单独展开。如果想深入某个组件——比如 Rectified Flow 的训练细节、SLAT VAE 的损失函数设计，或者稀疏算子的实现——可以从各章末尾的链接跳入相关前置知识文章。

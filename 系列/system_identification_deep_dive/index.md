@@ -6,7 +6,7 @@ category: 系列
 star: 5
 series:
   id: system_identification_deep_dive
-  totalChapters: 8
+  totalChapters: 9
   dir: /系列/system_identification_deep_dive
 ---
 
@@ -53,6 +53,7 @@ flowchart LR
 | 06 | [估计器与可辨识性](./06_估计器与可辨识性) | 最小二乘、约束、正则化和不确定度 |
 | 07 | [写回仿真与本体对齐](./07_写回仿真与本体对齐) | URDF、MuJoCo、Isaac Lab 的参数落地 |
 | 08 | [验证闭环与故障定位](./08_验证闭环与故障定位) | 误差指标、残差诊断和迭代清单 |
+| 09 | [机械臂末端负载自动惯性参数辨识](./09_机械臂末端负载自动惯性参数辨识) | 线性回归辨识、数据采集、基参数与 Pinocchio 工具链 |
 
 ## 相关前置知识
 

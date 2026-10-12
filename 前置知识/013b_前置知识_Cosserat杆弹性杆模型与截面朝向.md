@@ -56,6 +56,10 @@ Cosserat 杆用三个单位向量来表示截面朝向，称为 **director frame
 
 这三个向量合在一起就是一个旋转矩阵 $\mathbf{R} = [\mathbf{d}_1 | \mathbf{d}_2 | \mathbf{d}_3]$，记录这一截面在三维空间中的完整朝向。杆上每个截面都有自己的 $\mathbf{R}$，所以整条杆的状态是一条曲线加上沿曲线分布的一串旋转矩阵。
 
+<img src="/cosserat_director_frame.png" alt="三维弯曲杆上的 director frame——蓝色 d₁ 指向轴向，绿色 d₂ 和橙色 d₃ 张成截面内平面" class="img-wide">
+
+> 每个截面都附带三个正交向量（d₁、d₂、d₃）。注意截面随着杆的弯曲而旋转：直观看，d₁ 始终垂直于截面盘面，d₂/d₃ 随截面朝向一起转动。两个相邻截面的"朝向差"就是弯曲和扭转的来源。
+
 ```mermaid
 flowchart LR
     subgraph ROD["Cosserat 杆上的一段"]
@@ -82,6 +86,10 @@ flowchart LR
 **扭转率 $\tau$**：朝向差在 $\mathbf{d}_1$ 方向上的分量——截面绕自身轴旋转，即扭转。
 
 四个量各自独立：一根杆可以同时被拉长、剪切、弯曲和扭转，彼此不耦合。
+
+<img src="/cosserat_deformation_modes.png" alt="四种变形模式示意——(a) 拉伸：位置差沿 d₁ 超出静止长度；(b) 剪切：位置差出现 d₂/d₃ 横向分量；(c) 弯曲：截面朝向绕横轴旋转产生曲率；(d) 扭转：截面绕 d₁ 自转产生扭转率" class="img-full">
+
+> 灰色虚线是参考（无变形）状态，彩色实线是变形后状态。四种模式各自独立：左上角拉伸只改变轴向长度，右上角剪切只产生横向错位，左下角弯曲只转动截面朝向（曲率 κ），右下角扭转只让截面绕自身轴旋转（扭转率 τ）。
 
 ---
 
@@ -143,5 +151,29 @@ Cosserat 杆模型天然给出断裂的判据：当杆段的总应变能 $E_b$ �
 3. 对残差线性化（计算 Hessian），解稀疏线性系统得增量
 4. 用指数映射（旋转的李群运算）更新旋转，用加法更新位置
 5. 重复直到残差收敛
+
+```mermaid
+flowchart TD
+    INIT["初始化\n x⁰, R⁰, v⁰"]
+    READ["读旧状态\n xⁿ, Rⁿ, vⁿ"]
+    PRED["惯性预测\n x̃ = xⁿ + Δt·vⁿ"]
+    GRAD["计算应变能梯度\n残差 r = ∂E/∂q"]
+    HESS["计算 Hessian H\n解线性系统 HΔq = −r"]
+    UPD["更新状态\n xⁿ⁺¹ = x + Δx\n Rⁿ⁺¹ = exp(ω̂)·R"]
+    CONV{"收敛？\n ‖r‖ < ε"}
+    NEXT["步进 n ← n+1"]
+
+    INIT --> READ
+    READ --> PRED
+    PRED --> GRAD
+    GRAD --> HESS
+    HESS --> UPD
+    UPD --> CONV
+    CONV -- "否（继续迭代）" --> GRAD
+    CONV -- "是" --> NEXT
+    NEXT --> READ
+```
+
+> 内层循环（GRAD → HESS → UPD → CONV）是每个时间步内的牛顿迭代；外层循环（NEXT → READ）推进仿真时间。旋转更新用 $\exp(\hat{\omega})$ 而非普通加法，是因为旋转空间 $SO(3)$ 不是线性空间——直接加角速度会破坏正交性。
 
 隐式积分的优势是允许大时间步而不发散，代价是每步需要解一个稀疏线性系统（规模等于节点数 × 6）。
