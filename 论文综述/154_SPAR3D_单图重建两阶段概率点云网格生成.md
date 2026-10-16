@@ -17,6 +17,7 @@ star: 4
 **知识链接**：
 - [3D Gaussian Splatting：用一堆椭球把真实场景搬进电脑](/前置知识/007a_前置知识_3D_Gaussian_Splatting三维场景重建) — 了解 3DGS 基础表示有助于对比 SPAR3D 为何选择输出 mesh
 - [DDPM：去噪扩散概率模型](/前置知识/000b_前置知识_扩散模型DDPM) — Stage 1 的点云扩散基于 DDPM 框架
+- [RecGen 精读](/论文综述/162_RecGen_生成式联合形状位姿重建) — 同样是"两阶段单图重建"，但额外联合生成 6DoF 位姿，面向 Real2Sim
 
 ---
 

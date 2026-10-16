@@ -21,8 +21,8 @@ star: 4
 **知识链接**：
 - [SIMPLER：仿真评估真实机器人操作策略](./149_SIMPLER_仿真评估真实机器人操作策略) — 奠基工作，real2sim-eval 在软体方向对其扩展
 - [RoboGSim：Real2Sim2Real 高斯泼溅仿真器](./150_RoboGSim_Real2Sim2Real高斯泼溅仿真器) — 同期 3DGS 路线，专注刚体数据合成
-- [PolaRiS：可扩展的真实到仿真评估](./152_PolaRiS_可扩展的真实到仿真评估) — 后续工作，2DGS + 协同训练
-- [R2S-Eval：VLM 偏好评估](./153_R2S_Eval_VLM偏好评估) — Kaifeng Zhang 的后续工作，机构换到清华
+- PolaRiS — 后续工作，2DGS + 协同训练（本文撰写时该篇尚未成文，故不设链接）
+- R2S-Eval — Kaifeng Zhang 的后续工作，VLM 偏好评估（同上）
 
 ---
 
@@ -267,3 +267,6 @@ Kaifeng Zhang（通讯作者之一）后续在清华大学的 R2S-Eval 工作中
 - **150_RoboGSim** — 同期 3DGS 路线，专注刚体数据合成和评估统一
 - **152_PolaRiS** — 后续工作，聚焦可扩展零样本评估，不专门处理软体
 - **153_R2S_Eval** — Kaifeng Zhang 在清华的后续工作，VLM 偏好评估新范式
+- [PhysGaussian 精读](./165_PhysGaussian_物理集成三维高斯动态仿真) — 本文评估的软体仿真后端之一：把高斯基元直接当 MPM 粒子驱动
+- [Spring-Gauss 精读](./167_SpringGauss_弹簧质点高斯弹性物体重建与仿真) — 另一条软体仿真路线（离散质点弹簧），其"辨识参数不可跨拓扑迁移"的性质直接影响评估口径
+- [GIC 精读](./166_GIC_高斯告知连续体的材料属性辨识) — 软体材料参数辨识路线，评估时对材料真值的获取方式与本文讨论的指标设计相关

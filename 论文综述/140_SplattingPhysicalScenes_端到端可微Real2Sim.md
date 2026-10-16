@@ -846,6 +846,8 @@ flowchart LR
 - Todorov, Erez & Tassa, *"MuJoCo: A Physics Engine for Model-Based Control"*, IROS 2012（论文引 [3]）— 底层物理引擎
 - Zakka, Tassa et al., *"MuJoCo Menagerie"*, 2022（论文引 [24]）— 本文所用 ALOHA2 模型的来源；论文在附录明确"我们使用了 Menagerie 里的 ALOHA2 模型"
 - [具身高斯与机器人世界模型：五条路线综述（S36）](/论文综述/S36_具身高斯_机器人世界模型综述) — 本文作为"渲染替换"路线的奠基工作，在五路线综述里的定位与后续演进
+- [PhysGaussian 精读](./165_PhysGaussian_物理集成三维高斯动态仿真)——同样把物理直接挂在高层斯上，但走的是前向仿真（参数已知）而非端到端辨识
+- [GIC 精读](./166_GIC_高斯告知连续体的材料属性辨识)——从多视角视频辨识软体材料参数的逆问题路线，与本文的端到端可微辨识互为对照
 - Calli et al., *"Benchmarking in Manipulation Research: The YCB Object and Model Set"*, arXiv:1502.03143, 2015（论文引 [29]）— 两个数据集里所有被测物体的来源
 
 > **一个引用上的注意点**：第 7 节那张对比表里，`SplatSim` 与 `RoboStudio` 两列在论文正文里**只出现了名称、没有对应的参考文献编号**（表格里其余方法都带 [8]–[13] 的编号）。也就是说这两行是论文文本里的自述对比，读者无法从该论文的参考文献表追到原始出处；`1SR2S` 对应的是 [12]（Zhu et al., *One-shot real-to-sim via end-to-end differentiable simulation and rendering*，arXiv:2412.00259），`RoboGSim` 对应 [10]。如果你要在这张表的基础上做进一步引用，前两者需要自己另行查证。

@@ -301,6 +301,8 @@ flowchart LR
 - [形变梯度与应变张量](/前置知识/006g_前置知识_形变梯度与应变张量) — 本文能量函数的输入 $F$ 的完整定义
 - [应力张量与柯西应力](/前置知识/006h_前置知识_应力张量与柯西应力) — 本文求导得到的 PK1 应力的物理含义
 - [有限元方法 FEM 基础：四面体网格与形函数](/前置知识/006j_前置知识_有限元方法FEM基础_四面体网格与形函数) — 下一步：本文的材料模型如何在每个网格单元上被实际调用
+- [应变能密度与超弹性本构模型全景](/前置知识/018a_前置知识_应变能密度与超弹性本构模型全景) — 把本文的 Neo-Hookean 放进 StVK、Fixed Corotated、Mooney-Rivlin 的完整家族里对照
+- [PhysGaussian 精读](/论文综述/165_PhysGaussian_物理集成三维高斯动态仿真) — Neo-Hookean 与 Fixed Corotated 在 MPM 仿真器里的实际切换
 - Smith, Goes, Kim, "Analytic Eigensystems for Isotropic Distortion Energies" (2019) — Neo-Hookean 等能量函数解析梯度/海森矩阵的工程实现参考
 - Bower, *Applied Mechanics of Solids* — 超弹性材料模型的经典力学教材，含 Neo-Hookean、Mooney-Rivlin 等模型的详细推导
 

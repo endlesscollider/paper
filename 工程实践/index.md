@@ -32,3 +32,4 @@
 
 - [URDF 转 USD 完整工程流程详解](./URDF转USD完整工程流程详解) — Mesh 缩放、URDF 修复、格式转换、材质绑定、物理参数、传感器注入全流程
 - [Isaac Lab 仿真对齐与参数调优：从相机内参到关节 PD 增益](./IsaacLab仿真对齐与参数调优) — 相机镜头几何标定接入、关节 PD 增益系统辨识、物理材质对齐、域随机化范围设定
+- [Isaac Lab real2sim 回放的四种驱动模式](./IsaacLab回放四种驱动模式_state_action_response_servo) — state / action / response / servo 分别验证什么、PD 在哪一步被修正

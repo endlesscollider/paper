@@ -13,8 +13,8 @@ star: 4
 ## 知识链接
 
 **前置知识**：
-- URDF（Unified Robot Description Format）：ROS 生态中描述机器人运动学/动力学的 XML 格式
-- USD（Universal Scene Description）：Pixar 开发的场景描述格式，NVIDIA Isaac Sim / Omniverse 的原生格式
+- [URDF：机器人模型的通用描述格式](/前置知识/017a_前置知识_URDF机器人模型描述格式) — link/joint/origin/axis 等字段的完整含义
+- [USD：场景描述、坐标轴与单位约定](/前置知识/017c_前置知识_USD场景描述与坐标轴单位约定) — stage/prim/组合机制、upAxis 与 metersPerUnit
 
 **关联文章**：
 - 本文代码来自 `embodied-arena` 项目中的 `scripts/tools/urdf_to_usd_converter.py`（通用转换库）、`convert_ultron_to_usd.py`（多变体批量转换）、以及 `robot_asset/MI/ARX_Lift2/convert_lift_to_usd.py`（单机器人转换示例）

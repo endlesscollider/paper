@@ -281,6 +281,8 @@ flowchart LR
 - [形变梯度与应变张量](/前置知识/006g_前置知识_形变梯度与应变张量) — MPM粒子携带的核心状态之一
 - [应力张量与柯西应力](/前置知识/006h_前置知识_应力张量与柯西应力) — MPM网格上力计算的理论基础
 - [有限元方法 FEM 基础：四面体网格与形函数](/前置知识/006j_前置知识_有限元方法FEM基础_四面体网格与形函数) — MPM网格计算和有限元共享的数学工具
+- [PAC-NeRF 精读](/论文综述/164_PAC-NeRF_物理感知连续场的材料参数辨识) — 把本文的 MPM 与 NeRF 渲染耦合起来做参数辨识
+- [PhysGaussian 精读](/论文综述/165_PhysGaussian_物理集成三维高斯动态仿真) — 直接拿高斯基元当 MPM 粒子，取消一切几何转换
 - Jiang, Schroeder, Selle, Teran, Stomakhin, "The Material Point Method for Simulating Continuum Materials" (SIGGRAPH 2016 course notes) — MPM方法最广为流传的系统性入门教程
 - Stomakhin et al., "A Material Point Method for Snow Simulation" (SIGGRAPH 2013) — MPM应用于雪仿真的经典论文，展示了弹塑性材料模型的具体扩展
 
