@@ -17,6 +17,9 @@ const GaussianCovariancePlayground = defineAsyncComponent(() => import('./compon
 const GaussianCovariance1DPlayground = defineAsyncComponent(() => import('./components/GaussianCovariance1DPlayground.vue'))
 const GaussianCovariance2DPlayground = defineAsyncComponent(() => import('./components/GaussianCovariance2DPlayground.vue'))
 const GaussianSplatPlayground = defineAsyncComponent(() => import('./components/GaussianSplatPlayground.vue'))
+const ACTArchitecturePlayground = defineAsyncComponent(() => import('./components/ACTArchitecturePlayground.vue'))
+const ODEWorldArchitecturePlayground = defineAsyncComponent(() => import('./components/ODEWorldArchitecturePlayground.vue'))
+const RoboTwin2Playground = defineAsyncComponent(() => import('./components/RoboTwin2Playground.vue'))
 import { setupMathCopy } from './composables/useMathCopy'
 import { setupMermaidZoom } from './composables/useMermaidZoom'
 import { setupImageZoom } from './composables/useImageZoom'
@@ -37,6 +40,9 @@ export default {
     app.component('GaussianCovariance1DPlayground', GaussianCovariance1DPlayground)
     app.component('GaussianCovariance2DPlayground', GaussianCovariance2DPlayground)
     app.component('GaussianSplatPlayground', GaussianSplatPlayground)
+    app.component('ACTArchitecturePlayground', ACTArchitecturePlayground)
+    app.component('ODEWorldArchitecturePlayground', ODEWorldArchitecturePlayground)
+    app.component('RoboTwin2Playground', RoboTwin2Playground)
 
     if (typeof window !== 'undefined') {
       // 路由切换后重新初始化公式复制功能
