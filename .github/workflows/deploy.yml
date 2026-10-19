@@ -32,6 +32,10 @@ jobs:
           key: vitepress-${{ hashFiles('**/*.md', '.vitepress/config.mts', 'package-lock.json') }}
           restore-keys: vitepress-
       - run: npm run docs:build
+        env:
+          # ubuntu-latest 只有约 7GB 可用内存：heap 上限若高于物理内存，
+          # V8 会推迟 GC 直到进程被 OOM-Kill（表现为 18 分钟后 cancelled）。
+          NODE_OPTIONS: --max-old-space-size=6144
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .vitepress/dist

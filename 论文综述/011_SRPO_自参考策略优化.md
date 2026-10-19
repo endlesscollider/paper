@@ -496,3 +496,4 @@ SRPO 优雅地解决了 GRPO 在机器人操作中的核心痛点（全失败组
 - [VLA-RL 精读](./006_VLA_RL_PPO直接训练自回归VLA) ← 对比：RPRM 路线
 - [RIPT-VLA 精读](./007_RIPT_VLA_无Critic的VLA后训练) ← 对比：Dynamic Rejection 路线
 - [VLA 模型的 RL 后训练综述](/论文综述/S06_VLA模型的RL后训练综述) ← 完整方法对比
+- [V-JEPA 2 深度精读](/论文综述/154_VJEPA2_自监督视频世界模型与规划) ← SRPO 所用 world model 的原论文，含预训练机制、动作条件化与规划细节

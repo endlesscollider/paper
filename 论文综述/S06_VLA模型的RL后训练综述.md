@@ -1510,3 +1510,4 @@ flowchart TD
 - [VLA 综述](./S03_视觉语言动作模型VLA综述) — VLA 架构的完整介绍
 - [DPPO 精读](./001_DPPO_扩散策略策略优化) — 扩散策略 + RL 的经典方案（对比参考）
 - [Online DPRL 综述](./003_Online_DPRL_综述_扩散策略与在线RL) — 扩散策略 RL 的四大家族
+- [V-JEPA 2 深度精读](/论文综述/154_VJEPA2_自监督视频世界模型与规划) — SRPO 所用 world model 的原论文；自监督视频预训练 + 零样本机器人规划

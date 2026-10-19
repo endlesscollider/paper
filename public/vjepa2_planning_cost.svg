@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="420" viewBox="0 0 820 420">
+<defs></defs>
+<rect width="820" height="420" fill="#fafafa"/>
+<rect x="56.0" y="50.0" width="320.0" height="290.0" fill="#fff" rx="0"/>
+<line x1="56.0" y1="340.0" x2="376.0" y2="340.0" stroke="#e0e0e0" stroke-width="1"/>
+<text x="51" y="340.0" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">0</text>
+<line x1="56.0" y1="287.3" x2="376.0" y2="287.3" stroke="#e0e0e0" stroke-width="1"/>
+<text x="51" y="287.27272727272725" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">20</text>
+<line x1="56.0" y1="234.5" x2="376.0" y2="234.5" stroke="#e0e0e0" stroke-width="1"/>
+<text x="51" y="234.54545454545456" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">40</text>
+<line x1="56.0" y1="181.8" x2="376.0" y2="181.8" stroke="#e0e0e0" stroke-width="1"/>
+<text x="51" y="181.81818181818184" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">60</text>
+<line x1="56.0" y1="129.1" x2="376.0" y2="129.1" stroke="#e0e0e0" stroke-width="1"/>
+<text x="51" y="129.0909090909091" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">80</text>
+<line x1="56.0" y1="76.4" x2="376.0" y2="76.4" stroke="#e0e0e0" stroke-width="1"/>
+<text x="51" y="76.36363636363637" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">100</text>
+<rect x="64.5" y="129.1" width="22.4" height="210.9" fill="#FF9800" rx="3" opacity="0.88"/>
+<text x="75.68" y="126.0909090909091" dy="0" font-family="sans-serif" font-size="9" fill="#FF9800" text-anchor="middle" font-weight="bold">80</text>
+<rect x="89.1" y="76.4" width="22.4" height="263.6" fill="#2196F3" rx="3" opacity="0.88"/>
+<text x="100.32" y="73.36363636363637" dy="0" font-family="sans-serif" font-size="9" fill="#2196F3" text-anchor="middle" font-weight="bold">100</text>
+<text x="88.0" y="354" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">Reach</text>
+<rect x="128.5" y="340.0" width="22.4" height="0.0" fill="#FF9800" rx="3" opacity="0.88"/>
+<rect x="153.1" y="181.8" width="22.4" height="158.2" fill="#2196F3" rx="3" opacity="0.88"/>
+<text x="164.32" y="178.81818181818184" dy="0" font-family="sans-serif" font-size="9" fill="#2196F3" text-anchor="middle" font-weight="bold">60</text>
+<text x="152.0" y="354" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">Grasp</text>
+<text x="152.0" y="366" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">Cup</text>
+<rect x="192.5" y="287.3" width="22.4" height="52.7" fill="#FF9800" rx="3" opacity="0.88"/>
+<text x="203.68" y="284.27272727272725" dy="0" font-family="sans-serif" font-size="9" fill="#FF9800" text-anchor="middle" font-weight="bold">20</text>
+<rect x="217.1" y="287.3" width="22.4" height="52.7" fill="#2196F3" rx="3" opacity="0.88"/>
+<text x="228.32" y="284.27272727272725" dy="0" font-family="sans-serif" font-size="9" fill="#2196F3" text-anchor="middle" font-weight="bold">20</text>
+<text x="216.0" y="354" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">Grasp</text>
+<text x="216.0" y="366" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">Box</text>
+<rect x="256.5" y="340.0" width="22.4" height="0.0" fill="#FF9800" rx="3" opacity="0.88"/>
+<rect x="281.1" y="129.1" width="22.4" height="210.9" fill="#2196F3" rx="3" opacity="0.88"/>
+<text x="292.32" y="126.0909090909091" dy="0" font-family="sans-serif" font-size="9" fill="#2196F3" text-anchor="middle" font-weight="bold">80</text>
+<text x="280.0" y="354" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">Pick&</text>
+<text x="280.0" y="366" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">Place Cup</text>
+<rect x="320.5" y="340.0" width="22.4" height="0.0" fill="#FF9800" rx="3" opacity="0.88"/>
+<rect x="345.1" y="208.2" width="22.4" height="131.8" fill="#2196F3" rx="3" opacity="0.88"/>
+<text x="356.32" y="205.1818181818182" dy="0" font-family="sans-serif" font-size="9" fill="#2196F3" text-anchor="middle" font-weight="bold">50</text>
+<text x="344.0" y="354" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">Pick&</text>
+<text x="344.0" y="366" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">Place Box</text>
+<line x1="56.0" y1="50.0" x2="56.0" y2="340.0" stroke="#37474F" stroke-width="1.5"/>
+<line x1="56.0" y1="340.0" x2="376.0" y2="340.0" stroke="#37474F" stroke-width="1.5"/>
+<text x="216.0" y="26" dy="0" font-family="sans-serif" font-size="12" fill="#37474F" text-anchor="middle" font-weight="bold">Zero-shot manipulation — Lab 2</text>
+<text x="12" y="195" font-family="sans-serif" font-size="10" fill="#37474F" text-anchor="middle" transform="rotate(-90,12,195)">Success rate (%)</text>
+<rect x="56.0" y="396.0" width="10.0" height="10.0" fill="#FF9800" rx="3"/>
+<text x="70" y="405" dy="0" font-family="sans-serif" font-size="9" fill="#37474F" text-anchor="start" font-weight="normal">Cosmos</text>
+<rect x="124.0" y="396.0" width="10.0" height="10.0" fill="#2196F3" rx="3"/>
+<text x="138" y="405" dy="0" font-family="sans-serif" font-size="9" fill="#37474F" text-anchor="start" font-weight="normal">V-JEPA 2-AC</text>
+<rect x="456.0" y="50.0" width="334.0" height="290.0" fill="#fff" rx="0"/>
+<line x1="456.0" y1="340.0" x2="790.0" y2="340.0" stroke="#e0e0e0" stroke-width="1"/>
+<text x="451" y="340.0" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">1</text>
+<line x1="456.0" y1="308.6" x2="790.0" y2="308.6" stroke="#e0e0e0" stroke-width="1"/>
+<text x="451" y="308.57669332060334" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">2</text>
+<line x1="456.0" y1="235.6" x2="790.0" y2="235.6" stroke="#e0e0e0" stroke-width="1"/>
+<text x="451" y="235.61403470745051" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">10</text>
+<line x1="456.0" y1="185.8" x2="790.0" y2="185.8" stroke="#e0e0e0" stroke-width="1"/>
+<text x="451" y="185.80927197194615" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">30</text>
+<line x1="456.0" y1="131.2" x2="790.0" y2="131.2" stroke="#e0e0e0" stroke-width="1"/>
+<text x="451" y="131.228069414901" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">100</text>
+<line x1="456.0" y1="81.4" x2="790.0" y2="81.4" stroke="#e0e0e0" stroke-width="1"/>
+<text x="451" y="81.4233066793966" dy="0" font-family="sans-serif" font-size="9" fill="#888" text-anchor="end" font-weight="normal">300</text>
+<rect x="493.6" y="91.5" width="91.9" height="248.5" fill="#FF9800" rx="3" opacity="0.88"/>
+<text x="539.5" y="87.53935193375614" dy="0" font-family="sans-serif" font-size="11" fill="#FF9800" text-anchor="middle" font-weight="bold">4 min</text>
+<text x="539.5" y="354" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">Cosmos</text>
+<text x="539.5" y="366" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">80 samples</text>
+<text x="539.5" y="378" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">4 min</text>
+<rect x="660.6" y="214.3" width="91.9" height="125.7" fill="#2196F3" rx="3" opacity="0.88"/>
+<text x="706.5" y="210.30677328241333" dy="0" font-family="sans-serif" font-size="11" fill="#2196F3" text-anchor="middle" font-weight="bold">s</text>
+<text x="706.5" y="354" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">V-JEPA 2-AC</text>
+<text x="706.5" y="366" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">800 samples</text>
+<text x="706.5" y="378" dy="0" font-family="sans-serif" font-size="9" fill="#555" text-anchor="middle" font-weight="normal">16 s</text>
+<line x1="456.0" y1="50.0" x2="456.0" y2="340.0" stroke="#37474F" stroke-width="1.5"/>
+<line x1="456.0" y1="340.0" x2="790.0" y2="340.0" stroke="#37474F" stroke-width="1.5"/>
+<text x="623.0" y="26" dy="0" font-family="sans-serif" font-size="12" fill="#37474F" text-anchor="middle" font-weight="bold">Planning time per step (log scale)</text>
+<text x="410" y="195" font-family="sans-serif" font-size="10" fill="#37474F" text-anchor="middle" transform="rotate(-90,410,195)">Seconds (log)</text>
+</svg>

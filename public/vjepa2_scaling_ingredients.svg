@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="400" viewBox="0 0 780 400">
+<defs></defs>
+<rect width="780" height="400" fill="#fafafa"/>
+<rect x="64.0" y="48.0" width="692.0" height="272.0" fill="#fff" rx="0"/>
+<line x1="64.0" y1="291.4" x2="756.0" y2="291.4" stroke="#e0e0e0" stroke-width="1"/>
+<text x="58" y="291.36842105263156" dy="0" font-family="sans-serif" font-size="10" fill="#888" text-anchor="end" font-weight="normal">81</text>
+<line x1="64.0" y1="262.7" x2="756.0" y2="262.7" stroke="#e0e0e0" stroke-width="1"/>
+<text x="58" y="262.7368421052632" dy="0" font-family="sans-serif" font-size="10" fill="#888" text-anchor="end" font-weight="normal">82</text>
+<line x1="64.0" y1="234.1" x2="756.0" y2="234.1" stroke="#e0e0e0" stroke-width="1"/>
+<text x="58" y="234.10526315789474" dy="0" font-family="sans-serif" font-size="10" fill="#888" text-anchor="end" font-weight="normal">83</text>
+<line x1="64.0" y1="205.5" x2="756.0" y2="205.5" stroke="#e0e0e0" stroke-width="1"/>
+<text x="58" y="205.47368421052633" dy="0" font-family="sans-serif" font-size="10" fill="#888" text-anchor="end" font-weight="normal">84</text>
+<line x1="64.0" y1="176.8" x2="756.0" y2="176.8" stroke="#e0e0e0" stroke-width="1"/>
+<text x="58" y="176.8421052631579" dy="0" font-family="sans-serif" font-size="10" fill="#888" text-anchor="end" font-weight="normal">85</text>
+<line x1="64.0" y1="148.2" x2="756.0" y2="148.2" stroke="#e0e0e0" stroke-width="1"/>
+<text x="58" y="148.21052631578948" dy="0" font-family="sans-serif" font-size="10" fill="#888" text-anchor="end" font-weight="normal">86</text>
+<line x1="64.0" y1="119.6" x2="756.0" y2="119.6" stroke="#e0e0e0" stroke-width="1"/>
+<text x="58" y="119.57894736842107" dy="0" font-family="sans-serif" font-size="10" fill="#888" text-anchor="end" font-weight="normal">87</text>
+<line x1="64.0" y1="90.9" x2="756.0" y2="90.9" stroke="#e0e0e0" stroke-width="1"/>
+<text x="58" y="90.94736842105266" dy="0" font-family="sans-serif" font-size="10" fill="#888" text-anchor="end" font-weight="normal">88</text>
+<line x1="64.0" y1="62.3" x2="756.0" y2="62.3" stroke="#e0e0e0" stroke-width="1"/>
+<text x="58" y="62.31578947368422" dy="0" font-family="sans-serif" font-size="10" fill="#888" text-anchor="end" font-weight="normal">89</text>
+<line x1="64.0" y1="199.7" x2="756.0" y2="199.7" stroke="#607D8B" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="95.1" y="199.7" width="76.1" height="120.3" fill="#607D8B" rx="3"/>
+<text x="133.2" y="195.74736842105256" dy="0" font-family="sans-serif" font-size="11" fill="#37474F" text-anchor="middle" font-weight="bold">84.2</text>
+<text x="133.2" y="336" dy="0" font-family="sans-serif" font-size="10" fill="#555" text-anchor="middle" font-weight="normal">Baseline</text>
+<text x="133.2" y="350" dy="0" font-family="sans-serif" font-size="10" fill="#555" text-anchor="middle" font-weight="normal">ViT-L/16 VM2M</text>
+<rect x="233.5" y="171.1" width="76.1" height="28.6" fill="#2196F3" rx="3"/>
+<text x="271.6" y="167.11578947368415" dy="0" font-family="sans-serif" font-size="11" fill="#2196F3" text-anchor="middle" font-weight="bold">+1.0</text>
+<text x="271.6" y="336" dy="0" font-family="sans-serif" font-size="10" fill="#555" text-anchor="middle" font-weight="normal">+Data</text>
+<text x="271.6" y="350" dy="0" font-family="sans-serif" font-size="10" fill="#555" text-anchor="middle" font-weight="normal">2M→22M</text>
+<rect x="371.9" y="128.2" width="76.1" height="42.9" fill="#4CAF50" rx="3"/>
+<text x="410.0" y="124.16842105263149" dy="0" font-family="sans-serif" font-size="11" fill="#4CAF50" text-anchor="middle" font-weight="bold">+1.5</text>
+<text x="410.0" y="336" dy="0" font-family="sans-serif" font-size="10" fill="#555" text-anchor="middle" font-weight="normal">+Model</text>
+<text x="410.0" y="350" dy="0" font-family="sans-serif" font-size="10" fill="#555" text-anchor="middle" font-weight="normal">300M→1B</text>
+<rect x="510.3" y="105.3" width="76.1" height="22.9" fill="#9C27B0" rx="3"/>
+<text x="548.4000000000001" y="101.26315789473685" dy="0" font-family="sans-serif" font-size="11" fill="#9C27B0" text-anchor="middle" font-weight="bold">+0.8</text>
+<text x="548.4000000000001" y="336" dy="0" font-family="sans-serif" font-size="10" fill="#555" text-anchor="middle" font-weight="normal">+Training</text>
+<text x="548.4000000000001" y="350" dy="0" font-family="sans-serif" font-size="10" fill="#555" text-anchor="middle" font-weight="normal">90K→252K it.</text>
+<rect x="648.7" y="85.2" width="76.1" height="20.0" fill="#FF9800" rx="3"/>
+<text x="686.8000000000001" y="81.22105263157886" dy="0" font-family="sans-serif" font-size="11" fill="#FF9800" text-anchor="middle" font-weight="bold">+0.7</text>
+<text x="686.8000000000001" y="336" dy="0" font-family="sans-serif" font-size="10" fill="#555" text-anchor="middle" font-weight="normal">+Resolution</text>
+<text x="686.8000000000001" y="350" dy="0" font-family="sans-serif" font-size="10" fill="#555" text-anchor="middle" font-weight="normal">256→384</text>
+<line x1="64.0" y1="48.0" x2="64.0" y2="320.0" stroke="#37474F" stroke-width="1.5"/>
+<line x1="64.0" y1="320.0" x2="756.0" y2="320.0" stroke="#37474F" stroke-width="1.5"/>
+<text x="14" y="184" font-family="sans-serif" font-size="11" fill="#37474F" text-anchor="middle" transform="rotate(-90,14,184)">Avg accuracy over 6 tasks (%)</text>
+<text x="390" y="22" dy="0" font-family="sans-serif" font-size="13" fill="#37474F" text-anchor="middle" font-weight="bold">Scaling ingredients of V-JEPA 2 pretraining</text>
+</svg>
