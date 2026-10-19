@@ -27,10 +27,16 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Add swap
-        # runner 只有约 7GB 内存，主渲染堆上限设为 10240MB，
+        # runner 只有约 7GB 内存，主渲染堆上限设为 8192MB，
         # 超出物理内存的部分由 swap 兜底，避免被 OOM-Kill。
+        # 不同 runner 镜像的 fallocate 支持不一样，逐级回退到 dd。
+        continue-on-error: true
         run: |
-          sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
+          set -x
+          sudo swapoff -a || true
+          sudo rm -f /swapfile
+          sudo fallocate -l 8G /swapfile \
+            || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192 status=none
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile
           sudo swapon /swapfile

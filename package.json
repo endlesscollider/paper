@@ -5,7 +5,7 @@
   "scripts": {
     "docs:dev": "NODE_OPTIONS=--max-old-space-size=8192 vitepress dev --host",
     "docs:build": "npm run docs:build:site && npm run docs:build:refs",
-    "docs:build:site": "NODE_OPTIONS=--max-old-space-size=10240 vitepress build",
+    "docs:build:site": "NODE_OPTIONS=--max-old-space-size=8192 vitepress build",
     "docs:build:refs": "NODE_OPTIONS=\"--max-old-space-size=4096 --expose-gc\" node --experimental-strip-types .vitepress/refSectionsBuild.mts",
     "docs:preview": "vitepress preview",
     "test:physics-playground": "playwright test tests/physics-playground.spec.mjs --reporter=line"
