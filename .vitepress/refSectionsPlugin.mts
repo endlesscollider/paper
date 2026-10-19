@@ -113,10 +113,20 @@ export async function generateRefSections(options: RefSectionsPluginOptions & { 
   const targetDir = path.join(outDir, REF_SECTIONS_DIR)
   fs.mkdirSync(targetDir, { recursive: true })
 
+  let processed = 0
   for (const relFile of files) {
     const { key, payload } = await renderOneFile(md, srcDir, relFile)
     const outFile = path.join(targetDir, keyToSectionsFilename(key))
     fs.writeFileSync(outFile, JSON.stringify(payload), 'utf-8')
+
+    // 每篇渲染都会留下 cheerio 构建的整棵 DOM 树和大段 HTML 字符串；
+    // 单篇可能达到几十 MB，860 篇累积会让 V8 迟迟不回收。
+    // 主动周期性 GC 把峰值压在有界范围内（需 --expose-gc 启动）。
+    processed += 1
+    if (processed % 20 === 0) {
+      const gc = (globalThis as { gc?: () => void }).gc
+      if (gc) gc()
+    }
   }
 
   console.log(`[ref-sections] 已生成 ${files.length} 篇文章的分节索引 -> ${targetDir}`)

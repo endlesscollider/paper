@@ -23,19 +23,24 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
+      - name: Add swap
+        # runner 只有约 7GB 内存，主渲染堆上限设为 10240MB，
+        # 超出物理内存的部分由 swap 兜底，避免被 OOM-Kill。
+        run: |
+          sudo fallocate -l 8G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=8192
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
       - uses: actions/cache@v4
         with:
           path: .vitepress/cache
           key: vitepress-${{ hashFiles('**/*.md', '.vitepress/config.mts', 'package-lock.json') }}
           restore-keys: vitepress-
       - run: npm run docs:build
-        env:
-          # ubuntu-latest 只有约 7GB 可用内存：heap 上限若高于物理内存，
-          # V8 会推迟 GC 直到进程被 OOM-Kill（表现为 18 分钟后 cancelled）。
-          NODE_OPTIONS: --max-old-space-size=6144
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .vitepress/dist

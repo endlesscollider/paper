@@ -3,7 +3,7 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 import fs from 'node:fs'
 import path from 'node:path'
 import matter from 'gray-matter'
-import { refSectionsPlugin, generateRefSections } from './refSectionsPlugin.mts'
+import { refSectionsPlugin } from './refSectionsPlugin.mts'
 
 // --- Sidebar 缓存（本地开发加速）---
 // 原理：每次启动只用 statSync 检查 mtime/size，生成 fingerprint。
@@ -608,15 +608,8 @@ export default withMermaid(defineConfig({
     ]
   },
 
-  // build 模式下生成"分栏引用"功能所需的静态 JSON 索引。
-  // 必须用 VitePress 顶层的 buildEnd(siteConfig) 钩子而不是 vite 插件的
-  // buildEnd 钩子，原因见 refSectionsPlugin.mts 顶部注释。
-  async buildEnd(siteConfig) {
-    await generateRefSections({
-      srcDir: path.resolve(__dirname, '..'),
-      base: process.env.GITHUB_ACTIONS ? '/paper/' : '/',
-      markdown: { math: true },
-      outDir: siteConfig.outDir
-    })
-  }
+  // 分节索引（"分栏引用"功能的静态 JSON）不在构建进程内生成：
+  // 全站渲染两遍会让单进程峰值超过 runner 内存，见
+  // .vitepress/refSectionsBuild.mts 顶部说明。改由 `vitepress build`
+  // 结束后单独起一个进程执行（package.json 的 docs:build）。
 }))
