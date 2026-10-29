@@ -20,9 +20,10 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import matter from 'gray-matter'
 
-const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const CONTENT_DIRS = [
   { dir: '前置知识', label: '前置知识' },
