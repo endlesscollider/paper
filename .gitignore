@@ -22,3 +22,6 @@ test-results/
 .agents/
 tests/
 scripts/_tmp_*.json
+
+# Claude Code 本地配置
+.claude/

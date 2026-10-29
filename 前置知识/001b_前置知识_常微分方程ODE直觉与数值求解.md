@@ -603,48 +603,101 @@ graph LR
 
 ```python
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
+
+rcParams['font.sans-serif'] = ['Noto Sans CJK SC', 'DejaVu Sans']
+rcParams['font.monospace'] = ['Noto Sans Mono CJK SC', 'DejaVu Sans Mono']
+rcParams['axes.unicode_minus'] = False
 
 def euler_solve(f, x0, t_start, t_end, num_steps):
     """
     用 Euler 方法解 ODE: dx/dt = f(x, t)
-    
-    参数:
-        f: 向量场函数 f(x, t) -> dx/dt
-        x0: 初始状态
-        t_start: 起始时间
-        t_end: 结束时间
-        num_steps: 步数
-    
-    返回:
-        x_final: 终点状态
+    返回终点状态和完整轨迹（用于可视化）。
     """
     dt = (t_end - t_start) / num_steps
     x = x0.copy()
     t = t_start
-    
+    trajectory = [(t, x.copy())]
     for _ in range(num_steps):
         x = x + dt * f(x, t)  # 核心：一步 Euler
         t = t + dt
-    
-    return x
+        trajectory.append((t, x.copy()))
+    return x, trajectory
 
-
-# 示例 1：简单指数衰减 dx/dt = -x
+# ============ 示例 1：指数衰减 dx/dt = -x，不同步数对比 ============
 f_decay = lambda x, t: -x
-x_result = euler_solve(f_decay, np.array([10.0]), 0, 1, 10)
-print(f"Euler (10步): {x_result[0]:.4f}, 精确解: {10*np.exp(-1):.4f}")
+x0_decay = np.array([10.0])
+step_counts = [5, 10, 50]
+t_exact = np.linspace(0, 1, 200)
+x_exact = 10 * np.exp(-t_exact)
 
-# 示例 2：模拟 Flow Matching 推理
-# 假设 v_theta 是一个训练好的网络（这里用线性近似代替）
+# ============ 示例 2：模拟 Flow Matching 推理 ============
+np.random.seed(42)
+target = np.array([3.0, 5.0])
 def fake_v_theta(x, t):
     """假装这是训练好的网络，实际上是 target - x"""
-    target = np.array([3.0, 5.0])  # 目标数据点
-    return target - x  # 这就是条件向量场的简化版
+    return target - x
 
-x0 = np.random.randn(2)  # 采样噪声
-x_generated = euler_solve(fake_v_theta, x0, 0, 1, 5)
-print(f"5步生成结果: {x_generated}")  # 应该接近 [3, 5]
+x0_flow = np.random.randn(2)
+_, traj_flow = euler_solve(fake_v_theta, x0_flow, 0, 1, 5)
+
+# ============ 可视化 ============
+fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
+fig.suptitle('Euler 方法解 ODE：步数对比与 Flow Matching 推理', fontsize=14, fontweight='bold')
+
+# -- 左：指数衰减不同步数对比 --
+ax = axes[0]
+ax.set_title('指数衰减 dx/dt = −x，不同 Euler 步数')
+ax.plot(t_exact, x_exact, 'k-', lw=2, label='精确解 $10e^{-t}$', zorder=5)
+for steps, color in zip(step_counts, ['#D32F2F', '#E65100', '#1976D2']):
+    _, traj = euler_solve(f_decay, x0_decay, 0, 1, steps)
+    ts = [p[0] for p in traj]
+    xs = [p[1][0] for p in traj]
+    err = abs(xs[-1] - 10*np.exp(-1))
+    ax.plot(ts, xs, 'o--', color=color, lw=1.5, ms=5,
+            label=f'Euler {steps}步 (终点误差 {err:.3f})')
+ax.set_xlabel('t'); ax.set_ylabel('x(t)')
+ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+ax.text(0.55, 0.95, '步数越多 → 越接近精确解\n但每步都需要调用一次网络',
+        transform=ax.transAxes, fontsize=9, va='top',
+        bbox=dict(boxstyle='round,pad=0.3', fc='#FFF3E0', ec='#FFB74D'))
+
+# -- 右：2D Flow Matching 推理轨迹 --
+ax = axes[1]
+ax.set_title('Flow Matching 推理：噪声 → 目标')
+pts = np.array([p[1] for p in traj_flow])
+ts_f = [p[0] for p in traj_flow]
+ax.plot(pts[:,0], pts[:,1], 'o-', color='#1976D2', lw=2, ms=8, zorder=3)
+for pt, tv in zip(pts, ts_f):
+    ax.annotate(f't={tv:.1f}', pt, textcoords='offset points',
+                xytext=(8,8), fontsize=9, color='#555')
+ax.plot(*pts[0], 'o', color='#D32F2F', ms=14, zorder=4)
+ax.text(pts[0,0]-0.3, pts[0,1]-0.3, '噪声起点\n$x_0 \\sim \\mathcal{N}(0,I)$',
+        fontsize=10, color='#D32F2F', fontweight='bold', ha='center')
+ax.plot(*target, '*', color='#388E3C', ms=18, zorder=4)
+ax.text(target[0]+0.2, target[1]+0.2, f'目标 ({target[0]:.0f}, {target[1]:.0f})',
+        fontsize=10, color='#388E3C', fontweight='bold')
+for pt in pts[:-1]:
+    v = fake_v_theta(pt, 0)
+    ax.annotate('', xy=pt+0.15*v, xytext=pt,
+                arrowprops=dict(arrowstyle='->', color='#E65100', lw=1.2, alpha=0.6))
+ax.set_xlabel('$x_1$'); ax.set_ylabel('$x_2$')
+ax.grid(True, alpha=0.3); ax.set_aspect('equal')
+ax.text(0.02, 0.98, '每步沿 $v_\\theta(x,t)$ 方向\n走一个 Euler 步',
+        transform=ax.transAxes, fontsize=9, va='top',
+        bbox=dict(boxstyle='round,pad=0.3', fc='#E3F2FD', ec='#90CAF9'))
+
+plt.tight_layout()
+plt.savefig('ode_euler_method_demo.png', dpi=150, bbox_inches='tight')
+plt.show()
 ```
+
+运行结果：
+
+<img src="/ode_euler_method_demo.png" alt="Euler方法解ODE可视化：步数对比与Flow Matching推理轨迹" class="img-wide">
+
+> 左：指数衰减 $dx/dt = -x$ 的精确解（黑色实线）与 5/10/50 步 Euler 近似对比——步数越少误差越大，50 步时几乎与精确解重合。这直接回答了"推理步数取多少"的问题：更多步意味着更精确但更慢（每步要调用一次网络）。右：2D Flow Matching 推理的完整轨迹——从随机噪声 $x_0 \sim \mathcal{N}(0,I)$ 出发，每步沿学到的速度场 $v_\theta$ 方向走一个 Euler 步，5 步后到达目标数据点 $(3, 5)$ 附近。橙色箭头是每步的速度方向——可以看到随着 $x$ 接近目标，速度逐渐减小（因为 $v = \text{target} - x$），这正是 Flow Matching "走直线"的几何直觉。
 
 ---
 

@@ -176,43 +176,131 @@ PoE 相比 DH 的主要工程优势不是“算得更准”，而是关节轴含
 
 ## 七 最小可运行验证
 
-下面代码不实现矩阵指数的数值细节，而是调用 SciPy 的成熟实现验证“一个 Twist 经过指数映射后仍是合法齐次变换”。核心步骤是先构造反对称矩阵，再拼成 $4\times4$ 的 $\mathfrak{se}(3)$ 元素；`expm` 计算的是矩阵指数，不是逐元素指数。
+下面代码调用 SciPy 的矩阵指数 `expm` 验证”一个 Twist 经过指数映射后仍是合法齐次变换”，并把螺旋轨迹和坐标系演变可视化。核心步骤是先构造反对称矩阵，再拼成 $4\times4$ 的 $\mathfrak{se}(3)$ 元素；`expm` 计算的是矩阵指数，不是逐元素指数。
 
 ```python
 import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from scipy.linalg import expm
+from matplotlib import rcParams
+
+rcParams['font.sans-serif'] = ['Noto Sans CJK SC', 'DejaVu Sans']
+rcParams['font.monospace'] = ['Noto Sans Mono CJK SC', 'DejaVu Sans Mono']
+rcParams['axes.unicode_minus'] = False
 
 
 def skew(omega):
-    """把三维向量变成执行叉乘的反对称矩阵。"""
+    “””把三维向量变成执行叉乘的反对称矩阵。”””
     wx, wy, wz = omega
-    return np.array([
-        [0.0, -wz, wy],
-        [wz, 0.0, -wx],
-        [-wy, wx, 0.0],
-    ])
+    return np.array([[0, -wz, wy], [wz, 0, -wx], [-wy, wx, 0.0]])
 
 
 def twist_hat(omega, v):
-    xi_hat = np.zeros((4, 4))
-    xi_hat[:3, :3] = skew(omega)
-    xi_hat[:3, 3] = v
-    return xi_hat
+    “””把 Twist (ω, v) 组装成 4×4 的 se(3) 矩阵。”””
+    xi = np.zeros((4, 4))
+    xi[:3, :3] = skew(omega)
+    xi[:3, 3] = v
+    return xi
 
 
-# 绕 z 轴旋转，同时每转 1 rad 沿 z 轴前进 0.1 m。
-omega = np.array([0.0, 0.0, 1.0])
-v = np.array([0.0, 0.0, 0.1])
-theta = np.pi / 2
-T = expm(twist_hat(omega, v) * theta)
+def draw_frame(ax, T, label, length=0.15, lw=1.2):
+    “””在 3D 坐标系上画一个齐次变换对应的坐标架。”””
+    o = T[:3, 3]
+    colors = ['#D32F2F', '#388E3C', '#1976D2']
+    for i in range(3):
+        d = T[:3, i] * length
+        ax.quiver(*o, *d, color=colors[i], arrow_length_ratio=0.15, lw=lw)
+    ax.text(o[0], o[1], o[2] - 0.06, label, fontsize=9, ha='center',
+            fontweight='bold', color='#333')
 
-R = T[:3, :3]
-assert np.allclose(R.T @ R, np.eye(3), atol=1e-10)
-assert np.isclose(np.linalg.det(R), 1.0)
-print(T)
+def fmt_mat4(M):
+    lines = []
+    for i in range(4):
+        row = '  '.join(f'{M[i,j]:8.4f}' for j in range(4))
+        lines.append(f'  [ {row} ]')
+    return '\n'.join(lines)
+
+
+# ============ Twist：绕 z 轴旋转 + 沿 z 轴平移 ============
+omega = np.array([0.0, 0.0, 1.0])   # 旋转轴方向
+v     = np.array([0.0, 0.0, 0.1])   # 每转 1 rad 沿 z 平移 0.1 m
+theta_max = np.pi / 2               # 总共转 90°
+xi_hat = twist_hat(omega, v)
+
+# 沿 Twist 采样中间位姿，追踪点 [1,0,0] 的螺旋轨迹
+n_steps = 40
+thetas = np.linspace(0, theta_max, n_steps)
+p0 = np.array([1.0, 0.0, 0.0, 1.0])
+trajectory, Ts = [], []
+for th in thetas:
+    T = expm(xi_hat * th)
+    Ts.append(T)
+    trajectory.append((T @ p0)[:3])
+trajectory = np.array(trajectory)
+
+# 验证最终变换的 SE(3) 合法性
+T_final = Ts[-1]
+R_final = T_final[:3, :3]
+orth_err = np.max(np.abs(R_final.T @ R_final - np.eye(3)))
+det_R = np.linalg.det(R_final)
+assert np.allclose(R_final.T @ R_final, np.eye(3), atol=1e-10)
+assert np.isclose(det_R, 1.0)
+
+# ============ 可视化 ============
+fig = plt.figure(figsize=(15, 6))
+fig.suptitle('Twist 指数映射可视化：绕 z 轴旋转 + 沿 z 轴平移',
+             fontsize=13, fontweight='bold')
+
+# ── 面板 1：3D 螺旋轨迹 + 坐标系演变 ──
+ax1 = fig.add_subplot(121, projection='3d')
+ax1.set_title('螺旋轨迹与坐标系演变')
+ax1.plot([0, 0], [0, 0], [-0.05, 0.25], '--', color='#888', lw=1.5,
+         label='螺旋轴 (z)')
+ax1.plot(trajectory[:, 0], trajectory[:, 1], trajectory[:, 2],
+         color='#E65100', lw=2.5, label='点 [1,0,0] 的螺旋轨迹')
+ax1.scatter(*trajectory[0], color='#388E3C', s=60, zorder=5, label='起点')
+ax1.scatter(*trajectory[-1], color='#D32F2F', s=60, zorder=5, label='终点')
+for idx in [0, n_steps//4, n_steps//2, 3*n_steps//4, n_steps-1]:
+    lbl = f'θ={np.degrees(thetas[idx]):.0f}°' if idx > 0 else '初始'
+    draw_frame(ax1, Ts[idx], lbl)
+ax1.set_xlabel('X'); ax1.set_ylabel('Y'); ax1.set_zlabel('Z')
+ax1.set_xlim(-1.2, 1.2); ax1.set_ylim(-1.2, 1.2); ax1.set_zlim(-0.1, 0.25)
+ax1.legend(fontsize=8, loc='upper left')
+ax1.view_init(elev=25, azim=-55)
+
+# ── 面板 2：结果矩阵与验证 ──
+ax2 = fig.add_subplot(122)
+ax2.set_title('指数映射结果验证')
+ax2.axis('off')
+text = (
+    f'Twist 参数:\n'
+    f'  ω = [{omega[0]:.1f}, {omega[1]:.1f}, {omega[2]:.1f}]  (旋转轴方向)\n'
+    f'  v = [{v[0]:.1f}, {v[1]:.1f}, {v[2]:.1f}]  (沿轴平移速率)\n'
+    f'  θ = π/2 = {np.degrees(theta_max):.0f}°\n\n'
+    f'exp([S]^θ) =\n{fmt_mat4(T_final)}\n\n'
+    f'验证 SE(3) 合法性:\n'
+    f'  R^T R = I?  最大偏差 = {orth_err:.2e}  ✓\n'
+    f'  det R = {det_R:.6f}  ✓\n\n'
+    f'物理含义:\n'
+    f'  绕 z 轴旋转了 {np.degrees(theta_max):.0f}°\n'
+    f'  沿 z 轴平移了 {T_final[2,3]:.4f} m\n'
+    f'  (= 0.1 × π/2 ≈ {0.1*theta_max:.4f} m)'
+)
+ax2.text(0.05, 0.95, text, transform=ax2.transAxes, fontsize=10.5,
+         va='top', family='monospace',
+         bbox=dict(boxstyle='round,pad=0.5', fc='#F5F5F5', ec='#BDBDBD'))
+
+plt.tight_layout()
+plt.savefig('twist_se3_exp_map_demo.png', dpi=150, bbox_inches='tight')
+plt.show()
 ```
 
-两个断言分别检查旋转矩阵的正交性和行列式。若用“旋转矩阵加角速度矩阵乘时间”反复更新而不做指数映射或重新正交化，这两个性质会逐步漂移；这正是使用李群更新的直接工程价值。
+运行结果：
+
+<img src=”/twist_se3_exp_map_demo.png” alt=”Twist 指数映射可视化：螺旋轨迹、坐标系演变与 SE(3) 合法性验证” class=”img-wide”>
+
+> 左：点 $[1,0,0]$ 在 Twist $(\boldsymbol\omega=[0,0,1],\;\mathbf v=[0,0,0.1])$ 作用下从绿色起点沿橙色螺旋轨迹运动到红色终点——绕 $z$ 轴旋转 90° 的同时沿 $z$ 轴上升 $0.1\times\pi/2\approx0.157\;\text{m}$，五个位置处的 RGB 坐标架清楚展示了刚体朝向的连续变化。右：最终齐次变换矩阵的正交性偏差为机器精度级别（$\sim10^{-16}$），行列式精确等于 1——这两个性质正是使用指数映射（而非直接累加旋转增量）的工程价值：无论积分多少步，结果始终是合法的 $SE(3)$ 变换。
 
 ## 八 常见误区
 

@@ -168,76 +168,19 @@ XPBD（Extended PBD，Macklin et al. 2016 年提出）在 PBD 的投影公式里
 
 ---
 
-## 五、代码示例：完整的 PBD 绳索仿真
+## 五、交互演示：完整的 PBD 绳索仿真
 
-下面实现一个包含 3.1、3.2 节讲的距离约束投影，以及 2.1 节完整三步循环的 PBD 绳索仿真：
+下面的交互演示实现了包含距离约束投影（3.1、3.2 节）和完整三步循环（2.1 节）的 PBD 绳索仿真。动画分两个阶段：先实时展示迭代次数=10 时绳索从直线下垂到稳态，然后叠加展示不同迭代次数（1/5/10/30）的最终形状对比：
 
-```python
-import numpy as np
+<PhysicsPlayground preset="pbd-rope" title="PBD 绳索仿真：距离约束投影与迭代次数对比" />
 
-# ============ 绳索参数 ============
-n_points = 20
-total_length = 1.0
-rest_len = total_length / (n_points - 1)
-gravity = np.array([0.0, -9.8])
-dt = 0.02
-n_iterations = 10  # 约束求解迭代次数，对应本文 3.3 节讨论的关键参数
+> **阶段一**（仿真动画）：绳索从水平直线出发，在重力和距离约束投影的共同作用下逐步下垂到稳态。度量面板实时显示长度误差——迭代 10 次时最终误差约 9%，绳索接近但不完全保持自然长度。**阶段二**（叠加对比）：四种迭代次数的最终绳索形状重叠显示——红色（1 次）下垂最深、绳索被严重拉长（误差约 53%）；紫色（30 次）最紧凑、几乎保持自然长度（误差约 3%），直观验证了 3.3 节"迭代次数是精度和计算开销的直接权衡旋钮"。
 
-left_anchor = np.array([0.0, 0.0])
-right_anchor = np.array([total_length, 0.0])
+**交互演示中值得注意的要点**：
 
-positions = np.array([left_anchor + (right_anchor - left_anchor) * i / (n_points - 1)
-                        for i in range(n_points)])
-velocities = np.zeros_like(positions)
-
-# 逆质量：固定锚点设为 0（对应本文 3.2 节"锚点永远不分到位移"的机制）
-inv_mass = np.ones(n_points)
-inv_mass[0] = 0.0
-inv_mass[-1] = 0.0
-
-def solve_distance_constraint(pred, i, j, rest_length, inv_mass):
-    """
-    本文 3.2 节公式的直接实现：对质点 i, j 之间的距离约束做一次投影修正
-    """
-    w1, w2 = inv_mass[i], inv_mass[j]
-    if w1 + w2 == 0:
-        return  # 两端都是固定点，无法修正，直接跳过
-    delta = pred[j] - pred[i]
-    dist = np.linalg.norm(delta) + 1e-9
-    n_hat = delta / dist
-    diff = dist - rest_length
-    correction = diff / (w1 + w2)
-    pred[i] += w1 * correction * n_hat
-    pred[j] -= w2 * correction * n_hat
-
-for step in range(200):
-    # 第一步：预测（本文 2.1 节）
-    velocities = velocities + dt * gravity[None, :]
-    velocities[inv_mass == 0] = 0.0  # 固定点不受重力影响
-    predicted = positions + dt * velocities
-
-    # 第二步：约束投影，迭代 n_iterations 次（本文 3.3 节）
-    for _ in range(n_iterations):
-        for i in range(n_points - 1):
-            solve_distance_constraint(predicted, i, i + 1, rest_len, inv_mass)
-
-    # 第三步：反推速度（本文 2.1 节）
-    velocities = (predicted - positions) / dt
-    positions = predicted
-
-# 检验约束满足程度
-actual_length = np.sum(np.linalg.norm(np.diff(positions, axis=0), axis=1))
-error_pct = abs(actual_length - total_length) / total_length * 100
-print(f"仿真后绳索总长度: {actual_length:.4f} m（自然长度 {total_length} m）")
-print(f"长度误差: {error_pct:.2f}%（迭代次数={n_iterations}）")
-print(f"最低点: {positions[np.argmin(positions[:,1])]}")
-```
-
-**代码里值得注意的细节**：
-
-1. `inv_mass[0] = 0.0` 和 `inv_mass[-1] = 0.0` 是 PBD 处理"固定边界"最简洁的方式——不需要像上一篇质点弹簧代码那样每步手动把锚点拉回去，逆质量为零会让约束投影公式自动把锚点排除在修正范围之外。
-2. `solve_distance_constraint` 函数体和本文 3.2 节公式逐项对应,是"约束函数 + 逆质量加权投影"这套通用框架最小化的实现,增加新的约束类型（弯曲约束、碰撞约束）只需要按同样模式写一个新的 `solve_xxx_constraint` 函数,插入到迭代循环里。
-3. 试着把 `n_iterations` 从 10 改成 1 或 50 重新运行，可以直接验证本文图里展示的"迭代次数 vs 长度误差"这条收敛曲线。
+1. **迭代 1 次 vs 30 次的形状差异巨大**：迭代 1 次时约束几乎没有被满足，绳子被严重拉长，看起来像质点弹簧模型里"弹簧太软"的情况——这正是 PBD 的核心权衡：迭代次数直接决定约束满足的精度。
+2. **误差递减但不归零**：即使 30 次迭代，长度误差仍有约 3%——这是 Gauss-Seidel 迭代的固有特性（相邻约束共享质点，修正一个可能破坏另一个），只有无穷多次迭代才能精确归零。
+3. **红色锚点的逆质量为零**：固定锚点不需要像质点弹簧代码那样每步手动拉回，逆质量为零让约束投影公式自动将修正量全部分配给另一端——这是 PBD 处理固定边界最简洁的方式。
 
 ---
 

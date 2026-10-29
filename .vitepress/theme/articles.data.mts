@@ -32,20 +32,42 @@ const SCAN_DIRS = [
   { dir: '系列', base: '/系列', indexOnly: true }, // 系列目录只取各系列的 index.md
 ]
 
-/** 获取文件的最近更新时间戳（优先 git，fallback 到 fs mtime） */
+const _repoRoot = path.resolve(__dirname, '../../')
+let _gitTimestampCache: Map<string, number> | null = null
+
+/**
+ * 一次性批量读取所有文件的 git 最后修改时间，缓存到内存。
+ * 原先每个文件单独调 git log，470 个文件就是 470 次子进程，
+ * 导致 dev server 启动耗时数分钟。现在只 spawn 一次 git。
+ */
+function _buildGitCache(): Map<string, number> {
+  if (_gitTimestampCache) return _gitTimestampCache
+  const cache = new Map<string, number>()
+  try {
+    const out = execSync(
+      'git -c core.quotePath=false log --no-merges --pretty=format:"COMMIT %ct" --name-only',
+      { cwd: _repoRoot, encoding: 'utf-8', maxBuffer: 64 * 1024 * 1024 }
+    )
+    let ts = 0
+    for (const line of out.split('\n')) {
+      const t = line.trim()
+      if (!t) continue
+      const m = t.match(/^COMMIT (\d+)$/)
+      if (m) { ts = parseInt(m[1], 10) * 1000; continue }
+      // git 输出的是仓库相对路径；第一次出现 = 最近一次 commit
+      if (!cache.has(t)) cache.set(t, ts)
+    }
+  } catch {}
+  _gitTimestampCache = cache
+  return cache
+}
+
+/** 获取文件的最近更新时间戳（优先 git 批量缓存，fallback 到 fs mtime） */
 function getLastUpdated(filePath: string): number {
-  try {
-    const stdout = execSync(`git log -1 --format=%ct "${filePath}"`, {
-      cwd: path.resolve(__dirname, '../../'),
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim()
-    if (stdout) return parseInt(stdout, 10) * 1000
-  } catch {}
-  // fallback: filesystem mtime
-  try {
-    return fs.statSync(filePath).mtimeMs
-  } catch {}
+  const rel = path.relative(_repoRoot, filePath)
+  const ts = _buildGitCache().get(rel)
+  if (ts) return ts
+  try { return fs.statSync(filePath).mtimeMs } catch {}
   return 0
 }
 

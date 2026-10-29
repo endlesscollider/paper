@@ -61,6 +61,32 @@ $$
 **为什么这一步可以完全并行**：每个约束的投影计算只依赖它自己涉及的几个顶点的**当前**位置（在这一轮迭代开始时固定不变，不需要等其他约束算完），互不干扰——这和 [PBD](/前置知识/006f_前置知识_基于位置的动力学PBD) 里约束投影需要按顺序（Gauss-Seidel 风格）迭代、后面的约束会看到前面约束刚修改过的位置不同，Projective Dynamics 的局部步骤设计上就是完全独立、可以同时对所有约束并行计算的，这个差异是理解PD和PBD根本区别的关键（第四节详细展开）。
 :::
 
+**一句话**：三根弹簧各自独立投影——$AB$ 希望缩回 $(1.0,\,0)$、$AC$ 希望缩回 $(0.6,\,0.8)$、$BC$ 希望缩回 $(-0.6,\,0.8)$——对同一个顶点给出的"理想位置"互相矛盾，全局步骤要解决的正是这个冲突。
+
+::: details 📐 数值局部投影演算（点击展开）
+
+**用布料例子做一次局部投影。** 取布料网格中相邻的三个顶点 $A$、$B$、$C$，三根弹簧的自然长度均为 $L_0=1.0$，权重均为 $w=100$。当前（变形后的）位置：
+
+$$
+A=(0,\,0),\quad B=(1.8,\,0),\quad C=(0.9,\,1.2)
+$$
+
+三根弹簧都被拉长了（$|AB|=1.8$，$|AC|=|BC|=1.5$，全部超过自然长度 $1.0$）。对弹簧 $AB$ 做局部投影——保持边的方向不变，把长度缩回 $L_0$：
+
+$$
+\mathbf p_{AB} = L_0\cdot\frac{B-A}{\|B-A\|} = 1.0\times\frac{(1.8,\,0)}{1.8} = (1.0,\,0)
+$$
+
+弹簧 $AB$ 的"心愿"是让这条边从 $(1.8,\,0)$ 缩短为 $(1.0,\,0)$。同理，另外两根弹簧各自独立计算：
+
+$$
+\mathbf p_{AC} = 1.0\times\frac{(0.9,\,1.2)}{1.5} = (0.6,\,0.8),\qquad
+\mathbf p_{BC} = 1.0\times\frac{(-0.9,\,1.2)}{1.5} = (-0.6,\,0.8)
+$$
+
+三根弹簧互不商量——但它们对同一个顶点给出的"理想位置"会互相矛盾。以顶点 $A$ 为例：弹簧 $AB$ 希望 $A$ 往右挪（缩短 $AB$ 边），弹簧 $AC$ 希望 $A$ 往右上挪（缩短 $AC$ 边），两个方向不一致。这种冲突就是下一节"全局步骤"要解决的问题。
+:::
+
 ### 2.2 局部步骤的可视化
 
 <img src="/projective_dynamics_local_global_step.png" alt="Projective Dynamics局部投影与全局求解示意及能量收敛曲线" class="img-wide">
@@ -98,6 +124,21 @@ $$
 **为什么这个优化问题是线性的（好求解）**：注意这个目标函数里的 $\mathbf x$ 只出现在**二次**距离项里（$\|\mathbf x-\tilde{\mathbf x}\|^2$ 和 $\|\mathbf S_c\mathbf x-\mathbf p_c\|^2$ 都是关于 $\mathbf x$ 的二次函数），和材料本身是否非线性完全无关——**所有非线性都已经被"甩"进了上一节局部投影这一步**（局部投影本身可能涉及非线性的求解,但因为每个约束涉及的顶点数很少,通常有解析解或极快的局部迭代），全局步骤剩下的只是一个纯粹的、固定系数的二次优化问题，对 $\mathbf x$ 求导设为零就直接得到一个**线性**方程组,可以直接套用 [共轭梯度法](/前置知识/006k_前置知识_稀疏线性系统与共轭梯度法) 高效求解,而且这个线性系统的矩阵在整个仿真过程中通常保持不变（只要约束的拓扑结构不变),可以提前做一次矩阵分解（比如Cholesky分解）,反复复用,进一步加速。
 :::
 
+**一句话**：对全局目标求导令其为零后得到的线性方程组——左端矩阵 $A$ 只取决于网格拓扑和权重（仿真中恒定不变，可预分解），右端向量 $b$ 由惯性项和各弹簧投影结果叠加而成。
+
+::: details 📐 全局步骤线性系统结构（点击展开）
+
+**用布料三角形例子看全局步骤。** 沿用上一节的三顶点三弹簧设置。对全局目标函数求导令其等于零，得到一个线性方程组：
+
+$$
+\underbrace{\left(\frac{M}{\Delta t^2} + \sum_c w_c\,\mathbf S_c^\top \mathbf S_c\right)}_{\text{矩阵}\ A}\;\mathbf x \;=\; \underbrace{\frac{M}{\Delta t^2}\,\tilde{\mathbf x} + \sum_c w_c\,\mathbf S_c^\top \mathbf p_c}_{\text{向量}\ b}
+$$
+
+具体到我们的三顶点例子：$\mathbf x$ 是 $6\times1$ 向量（$A$、$B$、$C$ 各两个坐标拼接），$A$ 是 $6\times6$ 稀疏矩阵。弹簧 $AB$ 的选择矩阵 $\mathbf S_{AB}$ 从 $\mathbf x$ 中提取边向量 $B-A$；对应的 $\mathbf S_{AB}^\top\mathbf p_{AB}$ 把投影结果 $(1.0,\,0)$ "分配回"顶点 $A$（减去方向）和 $B$（加上方向）——三根弹簧的分配结果叠加在一起，构成右端向量 $b$ 的弹性部分。
+
+**关键性质**：左端矩阵 $A$ 只取决于网格拓扑（哪些顶点被哪些弹簧连接）和权重 $w_c$，**不取决于当前顶点位置**——整个仿真过程中 $A$ 恒定不变，可以在仿真开始前做一次 Cholesky 分解反复复用。每一轮迭代只需要根据新的投影 $\mathbf p_c$ 重新算右端向量 $b$（纯向量加法，极快），然后做一次回代求解就得到新的 $\mathbf x$。
+:::
+
 ### 3.2 局部-全局交替迭代
 
 一次局部投影加一次全局求解合起来称为**一次局部-全局迭代**。和 [PBD](/前置知识/006f_前置知识_基于位置的动力学PBD) 的距离约束迭代类似,一次迭代通常不足以让所有约束都精确满足（因为一个顶点同时受多个约束影响，全局步骤的折中结果又会让每个约束的局部投影"过时"),所以需要反复交替执行"局部投影→全局求解"若干轮，直到系统收敛到一个所有约束都近似满足的平衡状态——这正是右图能量曲线单调下降到平台的过程。
@@ -123,83 +164,19 @@ Projective Dynamics 的"全局求解"步骤,本质上是在做一次**真正的�
 
 ---
 
-## 五、代码示例：一个最小的 Projective Dynamics 弹簧网络仿真
+## 五、交互演示：Projective Dynamics 弹簧网络的局部-全局迭代
 
-```python
-import numpy as np
+下面的交互演示展示了一个三角形弹簧网络（三个顶点通过三根弹簧连接，目标边长均为 1.0）的 Projective Dynamics 迭代过程。三角形从偏离理想形状的初始位置出发，逐轮执行"局部投影→全局求解"，逐步收敛到接近等边的平衡形状。红/绿/蓝三条边分别标注当前长度，右侧柱状图实时展示能量下降和边长逼近目标的过程：
 
-def local_step_spring(x, edges, rest_lengths):
-    """
-    局部步骤：对每根弹簧独立计算投影目标位置差（本文2.1节）
-    返回每条边应该达到的方向向量（长度已经是rest_length）
-    """
-    projections = []
-    for (i, j), L0 in zip(edges, rest_lengths):
-        delta = x[j] - x[i]
-        dist = np.linalg.norm(delta)
-        direction = delta / (dist + 1e-9)
-        projections.append(direction * L0)  # 心愿的边向量（本文2.1节的p_proj）
-    return projections
+<PhysicsPlayground preset="projective-dynamics" title="Projective Dynamics 局部-全局迭代收敛" />
 
-def build_global_system(n_verts, edges, weights, mass, dt):
-    """
-    构建全局步骤的系统矩阵（本文3.1节公式对x求导后的线性系统系数矩阵），
-    这个矩阵只依赖网格拓扑和权重，不随迭代/时间步改变，可以提前分解复用。
-    """
-    A = np.eye(n_verts * 2) * (mass / dt**2)  # 惯性项贡献（2D，每个顶点2个自由度）
-    for (i, j), w in zip(edges, weights):
-        # 每根弹簧对i,j两个顶点的位置贡献一个简单的二次惩罚项系数
-        for a, b, s in [(i, i, 1), (j, j, 1), (i, j, -1), (j, i, -1)]:
-            A[2*a:2*a+2, 2*b:2*b+2] += s * w * np.eye(2)
-    return A
+> 动画以每轮迭代为一帧自动播放：灰色三角形是初始形状（参考），蓝色三角形是当前迭代的形状。度量面板显示当前迭代轮次、总能量（惯性+弹性）和三条边长。**关键观察**：能量在每一轮迭代后严格单调不增——这正是 Projective Dynamics 相比 PBD 更强的收敛保证；三条边长从各自的初始值快速逼近目标长度 1.0，但由于三根弹簧共享顶点、互相牵制，最终收敛到略大于 1.0 的折中值。
 
-def projective_dynamics_step(x, v, edges, rest_lengths, weights, mass, dt, gravity, n_iters=10):
-    """
-    完整的一次仿真步：预测 -> 若干轮局部-全局迭代 -> 更新速度
-    """
-    n_verts = len(x)
-    x_flat = x.flatten()
-    x_tilde = x_flat + dt * (v.flatten() + dt * np.tile(gravity, n_verts))  # 惯性预测位置
+**交互演示中值得注意的要点**：
 
-    A = build_global_system(n_verts, edges, weights, mass, dt)
-    b_inertia = (mass / dt**2) * x_tilde
-
-    x_new = x_tilde.copy()
-    for _ in range(n_iters):
-        # ---- 局部步骤 ----
-        proj = local_step_spring(x_new.reshape(-1, 2), edges, rest_lengths)
-
-        # ---- 全局步骤：组装右端项并求解线性系统 ----
-        b = b_inertia.copy()
-        for (i, j), w, p in zip(edges, weights, proj):
-            b[2*i:2*i+2] -= w * p
-            b[2*j:2*j+2] += w * p
-        x_new = np.linalg.solve(A, b)
-
-    v_new = (x_new - x_flat) / dt
-    return x_new.reshape(-1, 2), v_new.reshape(-1, 2)
-
-# ============ 贯穿全文的例子：三角形弹簧网络的一步仿真 ============
-x0 = np.array([[0.0, 0.0], [1.3, 0.3], [0.6, 1.4]])  # 偏离理想形状的初始位置
-v0 = np.zeros_like(x0)
-edges = [(0, 1), (1, 2), (0, 2)]
-rest_lengths = [1.0, 1.0, 1.0]
-weights = [2000.0, 2000.0, 2000.0]  # 权重要显著大于惯性项 mass/dt^2，约束的"意见"才有分量
-mass = 0.1
-dt = 0.01
-gravity = np.array([0.0, -9.8])
-
-x_new, v_new = projective_dynamics_step(x0, v0, edges, rest_lengths, weights, mass, dt, gravity, n_iters=15)
-print("新的顶点位置:\n", x_new)
-final_lengths = [np.linalg.norm(x_new[j]-x_new[i]) for i, j in edges]
-print("\n最终边长（应趋近rest_length=1.0）:", final_lengths)
-```
-
-**代码里值得注意的细节**：
-
-1. `build_global_system` 里的矩阵 `A` 只依赖网格拓扑（哪些顶点被哪些弹簧连接）和权重，不依赖任何顶点的具体位置——这正是本文 3.1 节强调的"全局步骤是线性的、矩阵固定不变"，真实工程实现里这个矩阵通常提前算好并做一次Cholesky分解，之后每一帧只需要重新组装右端项 `b`（依赖当前局部投影结果），反复复用同一个分解结果求解,比每次都重新做完整的共轭梯度迭代更快。
-2. `local_step_spring` 只依赖当前顶点位置,不依赖其他弹簧,可以在真实实现里完全并行化（比如写成一个GPU kernel，每个线程处理一根弹簧)。
-3. 运行代码可以看到,经过15轮局部-全局迭代,`final_lengths` 会显著逼近 `rest_length=1.0`（虽然由于三根弹簧共享顶点、互相牵制，不会精确等于1.0），这正是"能量单调下降到平衡状态"这个过程的具体数值验证。
+1. **能量单调下降**直接验证了本文 3.2 节的核心论点——这是 Projective Dynamics 建立在严格能量最小化框架上的直接结果，每次局部投影+全局求解都保证总能量不增。
+2. **前 2-3 轮改进最大**，之后逐渐趋于平衡——这说明实际仿真中不需要跑太多轮迭代就能得到足够好的近似解，这是 PD 方法工程可行性的关键。
+3. 三条边的最终长度略有差异（不完全等于 1.0），因为全局步骤是在"所有约束的心愿"和"惯性项"之间做折中——不会完美满足任何单个约束,而是找到一个让总能量最小的折中位置。
 
 ---
 

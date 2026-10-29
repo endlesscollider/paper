@@ -562,49 +562,100 @@ graph TD
 
 ```python
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import rcParams
+
+rcParams['font.sans-serif'] = ['Noto Sans CJK SC', 'DejaVu Sans']
+rcParams['font.monospace'] = ['Noto Sans Mono CJK SC', 'DejaVu Sans Mono']
+rcParams['axes.unicode_minus'] = False
 
 def simulate_forward_sde(x0, beta_func, num_steps=100, dt=0.01):
     """
     模拟 VP-SDE 前向过程（DDPM 的连续版本）
     dx = -0.5 * beta(t) * x * dt + sqrt(beta(t)) * dW
-    
-    参数:
-        x0: 初始数据点（干净数据）
-        beta_func: 噪声调度函数 beta(t)
-        num_steps: 离散步数
-        dt: 时间步长
     """
     x = x0.copy()
     trajectory = [x.copy()]
-    
     for i in range(num_steps):
         t = i * dt
         beta_t = beta_func(t)
-        
-        # 漂移项：把 x 往 0 拉
-        drift = -0.5 * beta_t * x * dt
-        
-        # 扩散项：注入随机噪声
-        noise = np.sqrt(beta_t) * np.sqrt(dt) * np.random.randn(*x.shape)
-        
-        # SDE 一步
+        drift = -0.5 * beta_t * x * dt        # 漂移项：把 x 往 0 拉
+        noise = np.sqrt(beta_t) * np.sqrt(dt) * np.random.randn(*x.shape)  # 扩散项
         x = x + drift + noise
         trajectory.append(x.copy())
-    
     return np.array(trajectory)
 
-
-# 线性噪声调度
-beta = lambda t: 0.1 + 10 * t  # 从 0.1 线性增到 10.1
-
-# 从一个 2D 数据点出发
+# 线性噪声调度 + 多条轨迹
+beta = lambda t: 0.1 + 10 * t
 x0 = np.array([3.0, 5.0])
-traj = simulate_forward_sde(x0, beta, num_steps=100, dt=0.01)
+np.random.seed(0)
+trajs = [simulate_forward_sde(x0, beta, num_steps=100, dt=0.01) for _ in range(8)]
 
-print(f"起点 (数据): {traj[0]}")
-print(f"终点 (噪声): {traj[-1]}")  # 应该接近 N(0, I)
-print(f"终点均值应接近 0: {np.mean(traj[-1]):.3f}")
+# ============ 可视化 ============
+fig, axes = plt.subplots(1, 3, figsize=(17, 5.2))
+fig.suptitle('前向 SDE 模拟：数据 → 噪声', fontsize=14, fontweight='bold')
+
+# -- 左：2D 轨迹 --
+ax = axes[0]
+ax.set_title('2D 轨迹：同一起点的多条随机路径')
+cmap = plt.cm.Blues(np.linspace(0.3, 0.9, len(trajs)))
+for i, traj in enumerate(trajs):
+    ax.plot(traj[:,0], traj[:,1], '-', color=cmap[i], alpha=0.6, lw=1)
+    ax.plot(traj[-1,0], traj[-1,1], 'o', color=cmap[i], ms=4, alpha=0.7)
+ax.plot(*x0, '*', color='#D32F2F', ms=16, zorder=5)
+ax.text(x0[0]+0.15, x0[1]+0.15, f'起点 ({x0[0]:.0f}, {x0[1]:.0f})',
+        fontsize=10, color='#D32F2F', fontweight='bold')
+ends = np.array([t[-1] for t in trajs])
+ax.plot(ends[:,0], ends[:,1], 'o', color='#1976D2', ms=6, zorder=4,
+        label='终点（应散布在 0 附近）')
+ax.axhline(0, color='#ccc', ls='--', lw=1); ax.axvline(0, color='#ccc', ls='--', lw=1)
+ax.legend(fontsize=8, loc='upper left')
+ax.set_xlabel('$x_1$'); ax.set_ylabel('$x_2$'); ax.grid(True, alpha=0.3)
+
+# -- 中：各分量随时间变化 --
+ax = axes[1]
+ax.set_title('分量随时间变化（漂移+扩散）')
+t_axis = np.linspace(0, 1, 101)
+for i, traj in enumerate(trajs[:4]):
+    ax.plot(t_axis, traj[:,0], '-', color='#1976D2', alpha=0.5, lw=1,
+            label='$x_1$' if i == 0 else None)
+    ax.plot(t_axis, traj[:,1], '-', color='#E65100', alpha=0.5, lw=1,
+            label='$x_2$' if i == 0 else None)
+ax.axhline(0, color='#ccc', ls='--', lw=1)
+ax.set_xlabel('t'); ax.set_ylabel('x(t)'); ax.legend(fontsize=9); ax.grid(True, alpha=0.3)
+ax.text(0.02, 0.98, '漂移项 $-\\frac{1}{2}\\beta(t)x$ 把 x 拉向 0\n'
+        '扩散项 $\\sqrt{\\beta(t)}dW$ 注入噪声',
+        transform=ax.transAxes, fontsize=8.5, va='top',
+        bbox=dict(boxstyle='round,pad=0.3', fc='#FFF3E0', ec='#FFB74D'))
+
+# -- 右：噪声调度与信号衰减 --
+ax = axes[2]
+ax.set_title('噪声调度 β(t) 与信号衰减')
+t_plot = np.linspace(0, 1, 200)
+ax.plot(t_plot, [beta(t) for t in t_plot], '-', color='#D32F2F', lw=2,
+        label='$\\beta(t) = 0.1 + 10t$')
+ax.set_xlabel('t'); ax.set_ylabel('$\\beta(t)$', color='#D32F2F')
+ax.tick_params(axis='y', labelcolor='#D32F2F'); ax.legend(fontsize=9, loc='upper left')
+ax.grid(True, alpha=0.3)
+ax2 = ax.twinx()
+alpha_bar = np.exp(-0.5 * (0.1*t_plot + 5*t_plot**2))
+ax2.plot(t_plot, alpha_bar, '-', color='#1976D2', lw=2, label='信号保留率 $\\bar{\\alpha}(t)$')
+ax2.set_ylabel('$\\bar{\\alpha}(t)$', color='#1976D2')
+ax2.tick_params(axis='y', labelcolor='#1976D2'); ax2.legend(fontsize=9, loc='center right')
+ax.text(0.5, 0.5, 't=0: 纯数据\nt=1: 近似纯噪声',
+        transform=ax.transAxes, ha='center', fontsize=9,
+        bbox=dict(boxstyle='round,pad=0.3', fc='#E8F5E9', ec='#81C784'))
+
+plt.tight_layout()
+plt.savefig('sde_forward_simulation_demo.png', dpi=150, bbox_inches='tight')
+plt.show()
 ```
+
+运行结果：
+
+<img src="/sde_forward_simulation_demo.png" alt="前向SDE模拟可视化：数据到噪声的扩散过程" class="img-wide">
+
+> 左：同一数据点 $(3,5)$ 出发的 8 条 SDE 轨迹——每条路径因随机噪声 $dW$ 不同而走出不同的锯齿路线，终点散布在原点附近（近似 $\mathcal{N}(0,I)$）。中：$x_1$（蓝）和 $x_2$（橙）分量随时间从初始值衰减到 0 附近的过程，漂移项把信号拉向零，扩散项注入随机抖动，越到后期噪声越大（因为 $\beta(t)$ 递增）。右：噪声调度 $\beta(t)$ 随时间线性增大（红），信号保留率 $\bar\alpha(t)$ 相应指数衰减（蓝）——$t=0$ 时数据完好，$t=1$ 时几乎全是噪声，这正是扩散模型"加噪→去噪"的物理基础。
 
 ---
 
